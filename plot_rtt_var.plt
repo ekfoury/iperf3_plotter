@@ -7,11 +7,11 @@ set datafile separator " "
 set xlabel "Time (sec)"
 #set format x '%S'
 
-set autoscale
+#set autoscale
 
 set ylabel "RTT Var"
 #set format y "%s"
-#set yrange [0:300]; set ytics(0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300)
+set yrange [0:*]; #set ytics(0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300)
 
 set title "RTT Var over time"
 set key reverse Left outside
