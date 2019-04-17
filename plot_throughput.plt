@@ -5,9 +5,10 @@ set datafile separator " "
 #set xdata time
 #set timefmt "%H:%M:%S"
 set xlabel "Time (sec)"
+set yrange [0:*]
 #set format x '%S'
 
-set autoscale
+#set autoscale
 
 set ylabel "Mbps"
 #set format y "%s"
