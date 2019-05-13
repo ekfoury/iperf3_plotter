@@ -1,23 +1,10 @@
 #!/bin/bash
 
-# This script reads a JSON file exported from iPerf3 that has multiple parallel streams, 
+# This script reads either a single JSON file exported from iPerf3 that has multiple parallel streams,
+# or multiple JSON files exported from iPerf3 BUT each file has 1 flow,
 # and calculate the fairness index according to Raj Jain's formula:
 # Fairness index = [(sum xi)**2] / {n * sum[(xi)**2]}
 
-
-preprocessor.sh $1 .
-
-if [ $? -ne 0 ]; then
-	exit 1
-fi
-
-cd results
-
-
-if [ ! -f 1.dat ]; then
-	echo "Error. 1.dat file does not exist in the current directory. Quitting..."
-	exit 1
-fi
 
 echo "*****************************************************************"
 echo "This script calculates the fairness index among parallels streams"
@@ -29,7 +16,32 @@ echo "-----------------------------------------------------------------"
 echo "-----------------------------------------------------------------"
 
 
-#fair4=`echo "scale=5; (($mean1 + $mean2 + $mean3 + $mean4) ^ 2) / (4 * ($mean1 ^ 2 + $mean2 ^2 + $mean3 ^ 2 + $mean4 ^ 2))" | bc -l`
+if [ $# -eq 1 ]; then
+	preprocessor.sh $1 .
+	if [ $? -ne 0 ]; then
+		exit 1
+	fi
+	cd results
+
+	if [ ! -f 1.dat ]; then
+		echo "Error. 1.dat file does not exist in the current directory. Quitting..."
+		exit 1
+	fi
+	
+else
+	outer_dir="results_fairness_dir"
+	mkdir $outer_dir 2> /dev/null
+	for file in $@ 
+	do
+		mkdir "res_$file" && cp $file "res_$file"
+	       	cd "res_$file"
+		preprocessor.sh $file .
+		cp results/1.dat ../$outer_dir/"$file.dat"
+		cd ..
+		rm -rf "res_$file"
+	done
+	cd $outer_dir
+fi
 
 n=0			# total number of .dat files
 tputs=()	# Array of all throughputs (n files) 
@@ -55,3 +67,5 @@ done
 findex=`echo "scale=5; ($total^2)/($n*$squared)" | bc -l`
 echo "Fairness index=$findex"
 echo "*****************************************************************"
+
+rm -rf "../results_fairness_dir" 2> /dev/null
