@@ -14,5 +14,5 @@ if [ $? -ne 0 ]; then
 fi
 
 cd results
-gnuplot /usr/bin/*.plt
+gnuplot /usr/bin/*.plt 2> /dev/null
 

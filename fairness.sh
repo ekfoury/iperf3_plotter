@@ -8,6 +8,7 @@
 
 echo "*****************************************************************"
 echo "This script calculates the fairness index among parallels streams"
+echo "or among several JSON files exported from iPerf3, 1 flow per each"
 echo "-----------------------------------------------------------------"
 echo "                         SUM(xi)^2"
 echo "F(x1, x2, ... , xn) = ---------------"
@@ -41,6 +42,7 @@ else
 		rm -rf "res_$file"
 	done
 	cd $outer_dir
+	gnuplot /usr/bin/*.plt
 fi
 
 n=0			# total number of .dat files
@@ -65,7 +67,13 @@ for i in ${tputs[@]}; do
 done
 
 findex=`echo "scale=5; ($total^2)/($n*$squared)" | bc -l`
-echo "Fairness index=$findex"
+
+RED='\033[0;31m'
+NC='\033[0m' 
+printf "Fairness index=${RED}$findex${NC}\n"
 echo "*****************************************************************"
 
-rm -rf "../results_fairness_dir" 2> /dev/null
+if [ $# -ne 1 ]; then
+	xdg-open throughput.pdf > /dev/null 2>&1
+	rm -rf "../results_fairness_dir" 2> /dev/null
+fi
