@@ -4,7 +4,4 @@ install: packages
 	cp plot_* /usr/bin
 	cp fairness.sh /usr/bin
 packages:
-	apt-get install iperf3
-	apt-get install jq
-	apt-get	install gnuplot
-
+	apt-get -y install iperf3 jq gnuplot
