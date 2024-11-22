@@ -26,6 +26,13 @@ This script accepts iPerf3's JSON file, calls preprocessor, and calls gnuplot to
 - pmtu
 - omitted
 
+## Updates
+The plot_iperf.sh script has been improved for better error handling and modularity:
+1. The script now processes each gnuplot .plt file individually.
+2. Execution success or failure for each .plt file is now explicitly logged:
+- **Success:** Prints a message indicating the file was executed successfully.
+- **Error:** Prints an error message and logs errors encountered while executing a .plt file to an error.out file in the current directory, without interrupting the execution of subsequent files.
+
 ## Install
 This script requires jq and gnuplot.
 Run the following command in the script's directory. It installs the dependencies, and makes the scripts accessible anywhere.

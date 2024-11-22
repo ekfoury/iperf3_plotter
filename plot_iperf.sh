@@ -14,5 +14,9 @@ if [ $? -ne 0 ]; then
 fi
 
 cd results
-gnuplot /usr/bin/*.plt 2> /dev/null
+
+for plt in /usr/bin/*.plt; do
+    echo "Executing $plt..."
+    gnuplot "$plt" 2>> ../error.out || echo "Error in $plt"
+done
 
