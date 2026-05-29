@@ -1,18 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${SCRIPT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
-if [ $# -ne 1 ]; then
-	echo "***************************************"
-	echo "Usage: $0 <iperf_json_file>"
-	echo "***************************************"
-fi
-
-preprocessor.sh $1 .
-
-if [ $? -ne 0 ]; then
-	exit 1
-fi
-
-cd results
-gnuplot /usr/bin/*.plt 2> /dev/null
+exec python3 -m iperf3_plotter all "$@"
 

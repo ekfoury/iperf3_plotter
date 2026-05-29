@@ -1,0 +1,16 @@
+.git
+.venv
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+results
+lab-results
+data
+plots
+report.html
+report_assets
+.pytest_cache
+.mypy_cache
+.ruff_cache

@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import warnings
+from pathlib import Path
+
+warnings.filterwarnings("ignore", message="Pandas requires version .*", category=UserWarning)
+
+import pandas as pd
+import typer
+
+from .metrics import flow_aggregates, interval_summary, jain_fairness, series_similarity
+from .manifest import ManifestError, load_manifest
+from .outputs import write_tables
+from .parser import IperfParseError, parse_files
+from .plots import generate_plots
+from .report import write_report
+
+app = typer.Typer(no_args_is_help=True, help="Analyze and plot iperf3 JSON results.")
+
+
+@app.command("parse")
+def parse_command(
+    inputs: list[Path] = typer.Argument(..., exists=True, readable=True, dir_okay=False, help="iperf3 JSON file(s)."),
+    out: Path = typer.Option(Path("data"), "--out", "-o", help="Directory for normalized CSV outputs."),
+    manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
+    time_mode: str = typer.Option("relative", "--time-mode", help="Use relative, global, offset, or wall time when computing derived tables."),
+) -> None:
+    """Normalize iperf3 JSON into CSV tables."""
+
+    intervals, summaries, runs = _parse_or_exit(inputs, manifest)
+    files = write_tables(intervals, summaries, runs, out, time_mode=time_mode)
+    typer.echo(f"Wrote normalized tables to {out}")
+    for name, path in files.items():
+        typer.echo(f"  {name}: {path}")
+
+
+@app.command("plot")
+def plot_command(
+    inputs: list[Path] = typer.Argument(..., exists=True, readable=True, dir_okay=False, help="iperf3 JSON file(s)."),
+    out: Path = typer.Option(Path("plots"), "--out", "-o", help="Directory for generated plots."),
+    formats: list[str] = typer.Option(["png"], "--format", "-f", help="Plot format. Repeat for png/pdf/svg."),
+    manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
+    time_mode: str = typer.Option("relative", "--time-mode", help="Use relative, global, offset, or wall time for the x-axis."),
+) -> None:
+    """Generate plots directly from iperf3 JSON."""
+
+    intervals, summaries, _runs = _parse_or_exit(inputs, manifest)
+    artifacts = generate_plots(intervals, summaries, out, formats=formats, time_mode=time_mode)
+    typer.echo(f"Wrote {len(artifacts)} plot file(s) to {out}")
+
+
+@app.command("report")
+def report_command(
+    inputs: list[Path] = typer.Argument(..., exists=True, readable=True, dir_okay=False, help="iperf3 JSON file(s)."),
+    out: Path = typer.Option(Path("report.html"), "--out", "-o", help="HTML report path."),
+    formats: list[str] = typer.Option(["png"], "--format", "-f", help="Plot format. HTML reports use PNG assets."),
+    manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
+    time_mode: str = typer.Option("relative", "--time-mode", help="Use relative, global, offset, or wall time for plots and metrics."),
+) -> None:
+    """Generate an HTML report with plots and summary tables."""
+
+    intervals, summaries, runs = _parse_or_exit(inputs, manifest)
+    asset_dir = out.with_suffix("").parent / f"{out.with_suffix('').name}_assets"
+    plot_formats = _ensure_png(formats)
+    artifacts = generate_plots(intervals, summaries, asset_dir, formats=plot_formats, time_mode=time_mode)
+    write_report(intervals, summaries, runs, artifacts, out, time_mode=time_mode)
+    typer.echo(f"Wrote report to {out}")
+
+
+@app.command("all")
+def all_command(
+    inputs: list[Path] = typer.Argument(..., exists=True, readable=True, dir_okay=False, help="iperf3 JSON file(s)."),
+    out: Path = typer.Option(Path("results"), "--out", "-o", help="Output directory."),
+    formats: list[str] = typer.Option(["png", "pdf"], "--format", "-f", help="Plot format. Repeat for png/pdf/svg."),
+    manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
+    time_mode: str = typer.Option("relative", "--time-mode", help="Use relative, global, offset, or wall time for plots and metrics."),
+) -> None:
+    """Run the complete pipeline: parse, plot, and report."""
+
+    intervals, summaries, runs = _parse_or_exit(inputs, manifest)
+    data_dir = out / "data"
+    plots_dir = out / "plots"
+    report_path = out / "report.html"
+    write_tables(intervals, summaries, runs, data_dir, time_mode=time_mode)
+    artifacts = generate_plots(intervals, summaries, plots_dir, formats=formats, time_mode=time_mode)
+    write_report(intervals, summaries, runs, artifacts, report_path, time_mode=time_mode)
+    typer.echo(f"Wrote data to {data_dir}")
+    typer.echo(f"Wrote {len(artifacts)} plot file(s) to {plots_dir}")
+    typer.echo(f"Wrote report to {report_path}")
+
+
+@app.command("fairness")
+def fairness_command(
+    inputs: list[Path] = typer.Argument(..., exists=True, readable=True, dir_okay=False, help="iperf3 JSON file(s)."),
+    level: str = typer.Option("flow", "--level", "-l", help="Fairness level: flow or stream."),
+    manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
+) -> None:
+    """Compute Jain fairness from average throughput."""
+
+    intervals, _summaries, _runs = _parse_or_exit(inputs, manifest)
+    if level not in {"flow", "stream"}:
+        raise typer.BadParameter("--level must be 'flow' or 'stream'")
+
+    if level == "flow":
+        entity_col = "flow_id"
+        metrics_df = interval_summary(flow_aggregates(intervals), entity_col)
+    else:
+        entity_col = "stream_id"
+        metrics_df = interval_summary(intervals, entity_col)
+
+    values = metrics_df["avg_throughput_mbps"].fillna(0)
+    fairness = jain_fairness(values)
+    typer.echo(f"Jain fairness ({level}): {fairness:.5f}" if fairness is not None else f"Jain fairness ({level}): n/a")
+    if not metrics_df.empty:
+        typer.echo(metrics_df[[entity_col, "avg_throughput_mbps", "total_mib", "retransmits"]].to_string(index=False))
+
+
+@app.command("diagnose")
+def diagnose_command(
+    inputs: list[Path] = typer.Argument(..., exists=True, readable=True, dir_okay=False, help="iperf3 JSON file(s)."),
+    manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
+) -> None:
+    """Inspect whether stream lines overlap because the raw data is similar."""
+
+    intervals, _summaries, _runs = _parse_or_exit(inputs, manifest)
+    summary = interval_summary(intervals, "stream_id")
+    similarity = series_similarity(intervals)
+
+    typer.echo("Stream summary:")
+    cols = [
+        "stream_id",
+        "avg_throughput_mbps",
+        "total_mib",
+        "mean_rtt_ms",
+        "p95_rtt_ms",
+        "retransmits",
+    ]
+    existing_cols = [col for col in cols if col in summary.columns]
+    typer.echo(summary[existing_cols].to_string(index=False) if not summary.empty else "  n/a")
+
+    typer.echo("\nExact-overlap checks:")
+    exact = similarity[similarity["exact_equal"]] if not similarity.empty else pd.DataFrame()
+    typer.echo(exact.to_string(index=False) if not exact.empty else "  No exactly equal stream pairs found.")
+
+    typer.echo("\nLargest throughput differences:")
+    throughput = similarity[similarity["metric"].eq("throughput_mbps")] if not similarity.empty else pd.DataFrame()
+    if throughput.empty:
+        typer.echo("  n/a")
+    else:
+        display = throughput.sort_values("max_abs_diff", ascending=False).head(10)
+        typer.echo(display.to_string(index=False))
+
+
+def _parse_or_exit(inputs: list[Path], manifest: Path | None = None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    try:
+        metadata = load_manifest(manifest) if manifest else None
+        return parse_files(inputs, metadata)
+    except (IperfParseError, ManifestError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _ensure_png(formats: list[str]) -> list[str]:
+    cleaned = [fmt.lower().lstrip(".") for fmt in formats]
+    return cleaned if "png" in cleaned else ["png", *cleaned]
