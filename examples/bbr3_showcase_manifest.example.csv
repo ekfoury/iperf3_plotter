@@ -14,3 +14,7 @@ runs/staggered/h2_bbrv3.json,bbrv3_1,BBRv3 flow 1,staggered_coexistence,bbrv3,cu
 runs/staggered/h3_bbrv3.json,bbrv3_2,BBRv3 flow 2,staggered_coexistence,bbrv3,cubic_vs_bbrv3,taildrop,1,120,20,1,0,1000,20,6,1,5,
 runs/fct/cubic_10mb_trial1.json,cubic_fct_t1,CUBIC short flow,fct,cubic,cubic_vs_bbrv3,taildrop,1,0,20,1,0,1000,20,2,1,1,10
 runs/fct/bbrv3_10mb_trial1.json,bbrv3_fct_t1,BBRv3 short flow,fct,bbrv3,cubic_vs_bbrv3,taildrop,1,0,20,1,0,1000,20,2,1,1,10
+runs/heatmap/bw100_d20_cubic.json,cubic_bw100_d20,CUBIC 100M/20ms,bdp_sweep,cubic,cubic_vs_bbrv3,taildrop,1,0,20,1,0,100,20,2,1,1,
+runs/heatmap/bw100_d20_bbrv3.json,bbrv3_bw100_d20,BBRv3 100M/20ms,bdp_sweep,bbrv3,cubic_vs_bbrv3,taildrop,1,0,20,1,0,100,20,2,1,1,
+runs/heatmap/bw1000_d80_cubic.json,cubic_bw1000_d80,CUBIC 1000M/80ms,bdp_sweep,cubic,cubic_vs_bbrv3,taildrop,1,0,80,1,0,1000,80,2,1,1,
+runs/heatmap/bw1000_d80_bbrv3.json,bbrv3_bw1000_d80,BBRv3 1000M/80ms,bdp_sweep,bbrv3,cubic_vs_bbrv3,taildrop,1,0,80,1,0,1000,80,2,1,1,

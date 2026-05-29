@@ -171,6 +171,10 @@ plots:
                 ("stagger_bbrv3", {"scenario": "staggered_coexistence", "cc_algo": "bbrv3", "flow_label": "BBRv3", "start_offset_s": 5}),
                 ("fct_cubic", {"scenario": "fct", "cc_algo": "cubic"}),
                 ("fct_bbrv3", {"scenario": "fct", "cc_algo": "bbrv3"}),
+                ("bdp_cubic_100_20", {"scenario": "bdp_sweep", "cc_algo": "cubic", "propagation_delay_ms": 20, "bottleneck_mbps": 100}),
+                ("bdp_bbrv3_100_20", {"scenario": "bdp_sweep", "cc_algo": "bbrv3", "propagation_delay_ms": 20, "bottleneck_mbps": 100}),
+                ("bdp_cubic_1000_80", {"scenario": "bdp_sweep", "cc_algo": "cubic", "propagation_delay_ms": 80, "bottleneck_mbps": 1000}),
+                ("bdp_bbrv3_1000_80", {"scenario": "bdp_sweep", "cc_algo": "bbrv3", "propagation_delay_ms": 80, "bottleneck_mbps": 1000}),
             ]
             paths = []
             metadata = {}
@@ -203,6 +207,7 @@ plots:
             self.assertIn("throughput_vs_rtt", names)
             self.assertIn("staggered_flow_fairness", names)
             self.assertIn("fct_cdf_by_cc", names)
+            self.assertIn("fairness_heatmap_bandwidth_delay", names)
 
 
 if __name__ == "__main__":

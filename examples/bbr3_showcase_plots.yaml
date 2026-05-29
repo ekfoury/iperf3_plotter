@@ -171,13 +171,11 @@ plots:
   - name: fairness_heatmap_bandwidth_delay
     kind: heatmap
     source: experiment_summary
+    filters:
+      scenario: bdp_sweep
     x: propagation_delay_ms
     y: bottleneck_mbps
     value: jain_fairness
-    facet_by:
-      - scenario
-      - buffer_bdp
-      - loss_percent
     annotations:
       - link_utilization_percent
       - share_cubic_percent
@@ -186,6 +184,7 @@ plots:
     x_label: Configured RTT or propagation delay (ms)
     y_label: Bottleneck bandwidth (Mbps)
     cmap: YlGnBu
+    colorbar_label: Jain fairness
     annotation_color: black
     annotation_fontsize: 7
     figsize: [8.5, 6.4]

@@ -417,7 +417,7 @@ def _plot_heatmap(
     ax.set_yticklabels([_format_tick(value) for value in pivot.index], rotation=_float_option(spec, "y_tick_rotation", default=0))
     if _bool_option(spec, "colorbar", "show_colorbar", default=True):
         colorbar = fig.colorbar(image, ax=ax)
-        colorbar.set_label(_ylabel(spec, _pretty(value)))
+        colorbar.set_label(str(_option(spec, "colorbar_label", default=_pretty(value))))
 
     if spec.get("annotate", True):
         annotation_tables = {
