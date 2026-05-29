@@ -8,6 +8,64 @@ warnings.filterwarnings("ignore", message="Pandas requires version .*", category
 
 import pandas as pd
 
+STREAM_DETAIL_COLUMNS = {
+    "stream_id",
+    "stream_index",
+    "socket",
+    "local_host",
+    "local_port",
+    "remote_host",
+    "remote_port",
+}
+
+MEASUREMENT_COLUMNS = {
+    "interval_index",
+    "start_s",
+    "end_s",
+    "midpoint_s",
+    "offset_start_s",
+    "offset_end_s",
+    "offset_midpoint_s",
+    "global_start_s",
+    "global_end_s",
+    "global_midpoint_s",
+    "absolute_start_s",
+    "absolute_end_s",
+    "duration_s",
+    "bytes",
+    "transfer_mib",
+    "throughput_bps",
+    "throughput_mbps",
+    "retransmits",
+    "cwnd_bytes",
+    "cwnd_kib",
+    "rtt_us",
+    "rtt_ms",
+    "rttvar_us",
+    "rttvar_ms",
+    "pmtu_bytes",
+    "omitted",
+    "jitter_ms",
+    "lost_packets",
+    "packets",
+    "lost_percent",
+    "active_duration_s",
+    "active_streams",
+}
+
+SUMMARY_MEASUREMENT_COLUMNS = {
+    "intervals",
+    "duration_s",
+    "total_mib",
+    "avg_throughput_mbps",
+    "mean_interval_mbps",
+    "p95_interval_mbps",
+    "retransmits",
+    "mean_rtt_ms",
+    "p95_rtt_ms",
+    "max_rtt_ms",
+}
+
 
 def jain_fairness(values: Iterable[float]) -> float | None:
     vals = [float(value) for value in values if value is not None and pd.notna(value)]
@@ -84,6 +142,10 @@ def flow_aggregates(intervals: pd.DataFrame) -> pd.DataFrame:
         agg_spec["omitted"] = "any"
     if "stream_id" in intervals.columns:
         agg_spec["stream_id"] = "nunique"
+
+    excluded = set(group_cols) | set(numeric_sums) | set(numeric_means) | set(numeric_max) | STREAM_DETAIL_COLUMNS
+    for col in _first_value_columns(intervals, excluded):
+        agg_spec.setdefault(col, "first")
 
     grouped = intervals.groupby(group_cols, dropna=False).agg(agg_spec).reset_index()
     if "stream_id" in grouped.columns:
@@ -168,6 +230,7 @@ def resample_time_bins(
         "protocol",
         "reverse",
     ]
+    metadata_cols.extend(col for col in _first_value_columns(df, set(metadata_cols) | MEASUREMENT_COLUMNS | STREAM_DETAIL_COLUMNS) if col not in metadata_cols)
     weighted_cols = [
         "rtt_ms",
         "rttvar_ms",
@@ -361,9 +424,51 @@ def interval_summary(intervals: pd.DataFrame, entity_col: str) -> pd.DataFrame:
                     "max_rtt_ms": group["rtt_ms"].max(),
                 }
             )
+        for col in _summary_metadata_columns(group, entity_col):
+            row[col] = _first_non_null(group[col])
         records.append(row)
 
     return pd.DataFrame.from_records(records).sort_values(entity_col)
+
+
+def experiment_summary(flow_summary: pd.DataFrame) -> pd.DataFrame:
+    """Summarize a sweep condition across all flows that share experiment metadata."""
+
+    if flow_summary.empty or "avg_throughput_mbps" not in flow_summary.columns:
+        return pd.DataFrame()
+
+    group_cols = _experiment_group_columns(flow_summary)
+    grouped = flow_summary.groupby(group_cols, dropna=False) if group_cols else [((), flow_summary)]
+    records = []
+    for key, group in grouped:
+        values = group["avg_throughput_mbps"].fillna(0)
+        total = float(values.sum())
+        record = {
+            "flows": int(group["flow_id"].nunique()) if "flow_id" in group.columns else int(len(group)),
+            "total_throughput_mbps": total,
+            "avg_flow_throughput_mbps": float(values.mean()) if len(values) else None,
+            "jain_fairness": jain_fairness(values),
+            "retransmits": float(group["retransmits"].fillna(0).sum()) if "retransmits" in group.columns else None,
+        }
+        if group_cols:
+            key_values = key if isinstance(key, tuple) else (key,)
+            record.update(dict(zip(group_cols, key_values)))
+        if "bottleneck_mbps" in group.columns and group["bottleneck_mbps"].notna().any():
+            bottleneck = float(group["bottleneck_mbps"].dropna().iloc[0])
+            record["link_utilization_percent"] = (total / bottleneck * 100) if bottleneck > 0 else None
+        if "mean_rtt_ms" in group.columns and group["mean_rtt_ms"].notna().any():
+            record["mean_rtt_ms"] = float(group["mean_rtt_ms"].mean())
+        if "p95_rtt_ms" in group.columns and group["p95_rtt_ms"].notna().any():
+            record["p95_rtt_ms"] = float(group["p95_rtt_ms"].mean())
+        if "cc_algo" in group.columns:
+            for cc_algo, cc_group in group.groupby("cc_algo", dropna=False):
+                key_name = _slug(cc_algo)
+                cc_total = float(cc_group["avg_throughput_mbps"].fillna(0).sum())
+                record[f"throughput_{key_name}_mbps"] = cc_total
+                record[f"share_{key_name}_percent"] = (cc_total / total * 100) if total > 0 else 0
+        records.append(record)
+
+    return pd.DataFrame.from_records(records)
 
 
 def series_similarity(
@@ -441,6 +546,51 @@ def time_bounds_columns(df: pd.DataFrame, mode: str) -> tuple[str, str]:
     if start_col.startswith("absolute_"):
         return start_col, "absolute_end_s"
     return start_col, "end_s"
+
+
+def _first_value_columns(df: pd.DataFrame, excluded: set[str]) -> list[str]:
+    columns = []
+    for col in df.columns:
+        if col in excluded or col.startswith("_"):
+            continue
+        columns.append(col)
+    return columns
+
+
+def _summary_metadata_columns(group: pd.DataFrame, entity_col: str) -> list[str]:
+    excluded = SUMMARY_MEASUREMENT_COLUMNS | MEASUREMENT_COLUMNS | STREAM_DETAIL_COLUMNS | {entity_col}
+    return _first_value_columns(group, excluded)
+
+
+def _experiment_group_columns(flow_summary: pd.DataFrame) -> list[str]:
+    excluded = (
+        SUMMARY_MEASUREMENT_COLUMNS
+        | {
+            "source_file",
+            "run_id",
+            "flow_id",
+            "flow_label",
+            "stream_id",
+            "cc_algo",
+            "protocol",
+            "reverse",
+            "num_streams",
+            "start_offset_s",
+        }
+    )
+    return _first_value_columns(flow_summary, excluded)
+
+
+def _first_non_null(series: pd.Series) -> object:
+    non_null = series.dropna()
+    return None if non_null.empty else non_null.iloc[0]
+
+
+def _slug(value: object) -> str:
+    text = str(value if value is not None and not pd.isna(value) else "unknown").strip().lower()
+    chars = [char if char.isalnum() else "_" for char in text]
+    slug = "_".join(part for part in "".join(chars).split("_") if part)
+    return slug or "unknown"
 
 
 def _grid_origin(value: float, bin_s: float) -> float:

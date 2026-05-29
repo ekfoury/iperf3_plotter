@@ -33,6 +33,7 @@ macOS it runs through Docker Desktop's Linux VM.
 - Python 3.10 or newer
 - `pandas`
 - `matplotlib`
+- `PyYAML`
 - `typer`
 - `iperf3` only if you need to generate new JSON files
 
@@ -251,8 +252,11 @@ Important CSV files:
 - `flow_time_bins.csv`: transfers resampled onto common time bins
 - `stream_summary.csv`: throughput, RTT, and retransmit summary per stream
 - `flow_summary.csv`: throughput, RTT, and retransmit summary per transfer
+- `experiment_summary.csv`: one row per experiment condition for sweep plots
 - `flow_fairness.csv`: Jain fairness over time among active transfers
 - `stream_fairness.csv`: Jain fairness over time among active streams
+- `flow_share.csv`: bandwidth share over time among active transfers
+- `stream_share.csv`: bandwidth share over time among active streams
 - `stream_similarity.csv`: pairwise checks for nearly identical stream time series
 
 ## Plot Types
@@ -286,7 +290,165 @@ Experiment-level plots include:
 - Throughput-delay scatter plot
 - Average throughput by stream
 
-## Time Modes
+## Advanced Features
+
+For a detailed, end-to-end guide with JSON snippets, manifests, generated
+figures, and BBRv3-style experiment workflows, see
+[docs/research_workflows.md](docs/research_workflows.md).
+
+### Custom Plot Specs
+
+For research sweeps, put experiment metadata in the manifest and describe plots
+in YAML or JSON. Any manifest column that is not one of the built-in fields is
+preserved in the derived tables, so columns such as `propagation_delay_ms`,
+`loss_percent`, `aqm`, `num_flows`, and `trial` can be used for grouping,
+filtering, faceting, and heatmaps.
+
+Generate only user-defined plots:
+
+```bash
+iperfplot custom *.json --manifest experiment.csv --plot-spec plots.yaml --out plots
+```
+
+Add custom plots to the normal data/plots/report pipeline:
+
+```bash
+iperfplot all *.json --manifest experiment.csv --plot-spec plots.yaml --out results
+```
+
+Example spec:
+
+```yaml
+plots:
+  - name: rtt_cdf_by_flow
+    kind: cdf
+    source: flow_intervals
+    metric: rtt_ms
+    group_by: flow_id
+    title: RTT CDF by flow
+    x_label: RTT (ms)
+    figsize: [7.5, 4.8]
+    dpi: 180
+    legend: false
+    color: "#1f77b4"
+    linewidth: 2.2
+
+  - name: fairness_heatmap
+    kind: heatmap
+    source: experiment_summary
+    x: propagation_delay_ms
+    y: bottleneck_mbps
+    value: jain_fairness
+    facet_by: [buffer_bdp, loss_percent]
+    annotations:
+      - link_utilization_percent
+      - share_cubic_percent
+      - share_bbrv2_percent
+    figsize: [8.5, 6.4]
+    cmap: YlGnBu
+    annotation_color: black
+    annotation_fontsize: 7
+```
+
+Run:
+
+```bash
+iperfplot all *.json --manifest experiment.csv --plot-spec plots.yaml --out results
+```
+
+### Example Plot Gallery
+
+These examples are generated from `sample/my_test.json` with
+`examples/custom_plots.yaml`.
+
+| RTT CDF | Throughput Time Series |
+| --- | --- |
+| ![RTT CDF by flow](docs/images/rtt_cdf_by_flow.png) | ![Throughput by flow](docs/images/throughput_by_flow.png) |
+
+| RTT Box Plot | Retransmit Histogram |
+| --- | --- |
+| ![RTT box plot by flow](docs/images/flow_rtt_boxplot.png) | ![Retransmit histogram](docs/images/retransmit_histogram.png) |
+
+Regenerate the gallery:
+
+```bash
+PYTHONPATH=src python3 -m iperf3_plotter custom \
+  sample/my_test.json \
+  --plot-spec examples/custom_plots.yaml \
+  --out docs/images \
+  --format png
+```
+
+Supported custom plot kinds:
+
+- `cdf` and `ccdf`
+- `histogram`
+- `line`
+- `time_series`
+- `scatter`
+- `bar`
+- `box`
+- `heatmap`
+
+Common style and layout options:
+
+- `figsize: [width, height]`, `dimensions: [width, height]`, or separate `width` / `height`, in Matplotlib inches
+- `dpi`: output resolution
+- `legend: false` or `legend: {show: true, loc: lower right, anchor: null, frame: true}`
+- `color`: one color for the plot
+- `colors`: a list of colors or a mapping from series label to color
+- `palette`: Matplotlib colormap name such as `tab10`, `Set2`, or `viridis`
+- `linewidth`, `linestyle`, `alpha`, `marker`, `marker_size`
+- `bar_width`, `bins`, `grid`, `x_tick_rotation`, `y_tick_rotation`
+- `cmap`, `colorbar`, `annotation_color`, and `annotation_fontsize` for heatmaps
+- `xlim`, `ylim`, `log_x`, and `log_y`
+
+Style options can be placed directly on the plot or inside a `style` object.
+
+Useful plot sources:
+
+- `intervals`: one row per stream interval
+- `flow_intervals`: parallel streams aggregated per transfer interval
+- `stream_time_bins` and `flow_time_bins`: common time-grid versions
+- `stream_summary` and `flow_summary`: one row per stream or transfer
+- `stream_fairness` and `flow_fairness`: Jain fairness over time
+- `stream_share` and `flow_share`: bandwidth share over time
+- `experiment_summary`: one row per experiment condition, with total throughput, Jain fairness, link utilization, and per-`cc_algo` shares
+
+See `examples/custom_plots.yaml` for a runnable sample spec and
+`examples/paper_style_plots.yaml` for sweep plots that expect manifest columns
+such as `propagation_delay_ms`, `bottleneck_mbps`, `buffer_bdp`, and
+`loss_percent`.
+
+### Paper-Style Scenario Specs
+
+`examples/paper_style_plots.yaml` is a scenario catalog inspired by the plots in
+Kfoury et al., "Performance Evaluation of TCP BBRv2 Alpha for Wired Broadband,
+considering Buffer Sizes, Packet Loss Rates, RTTs, and Number of Flows"
+([PDF](https://gomezgaona.github.io/online-cv/assets/pdfs/1-s2.0-S014036642030092X-main.pdf)).
+
+The file includes templates for these experiment families:
+
+| Scenario | Paper-style plot | Example spec names |
+| --- | --- | --- |
+| Same-CCA multi-flow buffer sweep | Throughput and link-utilization CDFs across buffer sizes and loss rates | `flow_throughput_cdf_by_buffer_and_loss`, `link_utilization_cdf_by_buffer_and_loss` |
+| Flow-count scaling | Retransmissions and RTT as the number of competing flows changes | `retransmits_vs_number_of_flows`, `rtt_vs_number_of_flows` |
+| Packet-loss sensitivity | Throughput and retransmissions as random packet loss changes | `throughput_vs_packet_loss`, `retransmits_vs_packet_loss` |
+| CUBIC/BBR coexistence | Fairness and bandwidth share as buffer size or flow mix changes | `coexistence_fairness_vs_buffer`, `coexistence_cubic_share_vs_buffer`, `cubic_share_vs_bbrv2_flow_count`, `bbrv2_share_vs_bbrv2_flow_count` |
+| Bandwidth-delay sweep | Fairness heatmap with link utilization and per-CCA share annotations | `fairness_heatmap_bandwidth_delay_sweep` |
+| RTT unfairness | Throughput and fairness for flows with different RTTs and AQM policies | `rtt_unfairness_throughput_vs_buffer`, `rtt_unfairness_fairness_vs_buffer` |
+| AQM retransmissions | Retransmissions under Tail Drop, FQ-CoDel, CAKE, or ECN variants | `rtt_unfairness_retransmits_vs_buffer` |
+| Flow completion time | Mean FCT and FCT CDFs across buffer sizes, loss rates, and CCA mixes | `fct_vs_buffer`, `fct_cdf_by_buffer_and_loss` |
+| AQM fairness | Jain fairness as a function of buffer size and queue policy | `aqm_fairness_vs_buffer` |
+
+Typical manifest columns for these specs:
+
+```csv
+file,flow_id,cc_algo,tested_cc_algo,cc_mix,buffer_bdp,loss_percent,num_flows,num_cubic_flows,num_bbrv2_flows,propagation_delay_ms,bottleneck_mbps,aqm,trial,start_offset_s
+run1.json,flow1,cubic,cubic,cubic_only,1,0,100,100,0,100,1000,taildrop,1,0
+```
+
+### Time Modes
 
 - `relative`: each JSON file starts at X=0
 - `global`: align files by iperf3 timestamps and normalize the earliest start to X=0
@@ -306,7 +468,7 @@ iperfplot all *.json --time-mode global --out results
 iperfplot all *.json --manifest experiment.json --time-mode offset --out results
 ```
 
-## Compatibility Wrappers
+### Compatibility Wrappers
 
 These wrappers are kept for users of the old script names:
 
@@ -318,7 +480,7 @@ These wrappers are kept for users of the old script names:
 
 The maintained interface is `iperfplot`.
 
-## Optional Test Lab
+### Optional Test Lab
 
 The `lab/` directory contains a Docker-based Mininet/iperf3 testbed. It runs
 Mininet and `tc` inside Linux, generates iperf3 JSON files, writes a manifest,

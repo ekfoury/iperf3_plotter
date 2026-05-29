@@ -1,0 +1,51 @@
+plots:
+  - name: rtt_cdf_by_flow
+    kind: cdf
+    source: flow_intervals
+    metric: rtt_ms
+    group_by: flow_id
+    title: RTT CDF by flow
+    x_label: RTT (ms)
+    figsize: [7.5, 4.8]
+    dpi: 180
+    legend: false
+    color: "#1f77b4"
+    linewidth: 2.2
+
+  - name: throughput_by_flow
+    kind: line
+    source: flow_time_bins
+    x: time_bin_start_s
+    y: throughput_mbps
+    group_by: flow_id
+    title: Throughput by flow
+    x_label: Experiment time (s)
+    y_label: Throughput (Mbps)
+    palette: tab10
+    marker: o
+    marker_size: 4
+    legend:
+      show: true
+      loc: center left
+      anchor: [1.02, 0.5]
+
+  - name: flow_rtt_boxplot
+    kind: box
+    source: flow_intervals
+    y: rtt_ms
+    group_by: flow_id
+    title: RTT distribution by flow
+    y_label: RTT (ms)
+    x_tick_rotation: 20
+    alpha: 0.75
+
+  - name: retransmit_histogram
+    kind: histogram
+    source: flow_intervals
+    metric: retransmits
+    group_by: flow_id
+    bins: 12
+    title: Retransmits per interval
+    x_label: Retransmits
+    legend: false
+    color: "#d62728"

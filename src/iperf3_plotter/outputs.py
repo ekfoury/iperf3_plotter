@@ -10,6 +10,8 @@ import pandas as pd
 
 from . import __version__
 from .metrics import (
+    bandwidth_share,
+    experiment_summary,
     fairness_over_time,
     flow_aggregates,
     interval_summary,
@@ -65,6 +67,10 @@ def write_tables(
     files["flow_summary"] = out_dir / "flow_summary.csv"
     flow_summary.to_csv(files["flow_summary"], index=False)
 
+    experiment_df = experiment_summary(flow_summary)
+    files["experiment_summary"] = out_dir / "experiment_summary.csv"
+    experiment_df.to_csv(files["experiment_summary"], index=False)
+
     stream_fairness = fairness_over_time(stream_bins, "stream_id", "time_bin_start_s") if not stream_bins.empty else pd.DataFrame()
     files["stream_fairness"] = out_dir / "stream_fairness.csv"
     stream_fairness.to_csv(files["stream_fairness"], index=False)
@@ -72,6 +78,14 @@ def write_tables(
     flow_fairness = fairness_over_time(flow_bins, "flow_id", "time_bin_start_s") if not flow_bins.empty else pd.DataFrame()
     files["flow_fairness"] = out_dir / "flow_fairness.csv"
     flow_fairness.to_csv(files["flow_fairness"], index=False)
+
+    stream_share = bandwidth_share(stream_bins, "stream_id", "time_bin_start_s") if not stream_bins.empty else pd.DataFrame()
+    files["stream_share"] = out_dir / "stream_share.csv"
+    stream_share.to_csv(files["stream_share"], index=False)
+
+    flow_share = bandwidth_share(flow_bins, "flow_id", "time_bin_start_s") if not flow_bins.empty else pd.DataFrame()
+    files["flow_share"] = out_dir / "flow_share.csv"
+    flow_share.to_csv(files["flow_share"], index=False)
 
     metadata = {
         "version": __version__,

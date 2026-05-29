@@ -16,6 +16,24 @@ class IperfParseError(ValueError):
     """Raised when a file does not look like iperf3 JSON output."""
 
 
+KNOWN_METADATA_KEYS = {
+    "file",
+    "path",
+    "source_file",
+    "run_id",
+    "flow_id",
+    "label",
+    "flow_label",
+    "cc_algo",
+    "scenario",
+    "group",
+    "start_offset_s",
+    "rtt_ms",
+    "bottleneck_mbps",
+    "buffer_bdp",
+}
+
+
 def parse_files(
     paths: list[Path],
     metadata_by_file: dict[str, dict[str, Any]] | None = None,
@@ -69,6 +87,7 @@ def parse_file(
     rtt_config_ms = _float(metadata.get("rtt_ms"))
     bottleneck_mbps = _float(metadata.get("bottleneck_mbps"))
     buffer_bdp = _float(metadata.get("buffer_bdp"))
+    extra_metadata = _extra_metadata(metadata)
     source_file = str(path)
     start = _dict(data.get("start"))
     end = _dict(data.get("end"))
@@ -95,56 +114,59 @@ def parse_file(
             duration_s = _float(stream_dict.get("seconds"))
 
             interval_records.append(
-                {
-                    "source_file": source_file,
-                    "run_id": run_id,
-                    "flow_id": flow_id,
-                    "flow_label": flow_label,
-                    "cc_algo": cc_algo,
-                    "scenario": scenario,
-                    "group": group,
-                    "start_offset_s": start_offset_s,
-                    "rtt_config_ms": rtt_config_ms,
-                    "bottleneck_mbps": bottleneck_mbps,
-                    "buffer_bdp": buffer_bdp,
-                    "stream_id": f"{flow_id}:stream-{stream_index}",
-                    "stream_index": stream_index,
-                    "socket": socket,
-                    "local_host": connected.get(socket_key, {}).get("local_host"),
-                    "local_port": connected.get(socket_key, {}).get("local_port"),
-                    "remote_host": connected.get(socket_key, {}).get("remote_host"),
-                    "remote_port": connected.get(socket_key, {}).get("remote_port"),
-                    "protocol": protocol,
-                    "num_streams": num_streams,
-                    "reverse": reverse,
-                    "interval_index": interval_index,
-                    "start_s": start_s,
-                    "end_s": end_s,
-                    "midpoint_s": _midpoint(start_s, end_s),
-                    "offset_start_s": _offset(start_s, start_offset_s),
-                    "offset_end_s": _offset(end_s, start_offset_s),
-                    "offset_midpoint_s": _offset(_midpoint(start_s, end_s), start_offset_s),
-                    "absolute_start_s": _absolute(epoch, start_s),
-                    "absolute_end_s": _absolute(epoch, end_s),
-                    "duration_s": duration_s,
-                    "bytes": _float(stream_dict.get("bytes")),
-                    "transfer_mib": _bytes_to_mib(stream_dict.get("bytes")),
-                    "throughput_bps": _float(stream_dict.get("bits_per_second")),
-                    "throughput_mbps": _bps_to_mbps(stream_dict.get("bits_per_second")),
-                    "retransmits": _float(stream_dict.get("retransmits")),
-                    "cwnd_bytes": _float(stream_dict.get("snd_cwnd")),
-                    "cwnd_kib": _bytes_to_kib(stream_dict.get("snd_cwnd")),
-                    "rtt_us": _float(stream_dict.get("rtt")),
-                    "rtt_ms": _us_to_ms(stream_dict.get("rtt")),
-                    "rttvar_us": _float(stream_dict.get("rttvar")),
-                    "rttvar_ms": _us_to_ms(stream_dict.get("rttvar")),
-                    "pmtu_bytes": _float(stream_dict.get("pmtu")),
-                    "omitted": _bool(stream_dict.get("omitted")),
-                    "jitter_ms": _float(stream_dict.get("jitter_ms")),
-                    "lost_packets": _float(stream_dict.get("lost_packets")),
-                    "packets": _float(stream_dict.get("packets")),
-                    "lost_percent": _float(stream_dict.get("lost_percent")),
-                }
+                _with_extra_metadata(
+                    {
+                        "source_file": source_file,
+                        "run_id": run_id,
+                        "flow_id": flow_id,
+                        "flow_label": flow_label,
+                        "cc_algo": cc_algo,
+                        "scenario": scenario,
+                        "group": group,
+                        "start_offset_s": start_offset_s,
+                        "rtt_config_ms": rtt_config_ms,
+                        "bottleneck_mbps": bottleneck_mbps,
+                        "buffer_bdp": buffer_bdp,
+                        "stream_id": f"{flow_id}:stream-{stream_index}",
+                        "stream_index": stream_index,
+                        "socket": socket,
+                        "local_host": connected.get(socket_key, {}).get("local_host"),
+                        "local_port": connected.get(socket_key, {}).get("local_port"),
+                        "remote_host": connected.get(socket_key, {}).get("remote_host"),
+                        "remote_port": connected.get(socket_key, {}).get("remote_port"),
+                        "protocol": protocol,
+                        "num_streams": num_streams,
+                        "reverse": reverse,
+                        "interval_index": interval_index,
+                        "start_s": start_s,
+                        "end_s": end_s,
+                        "midpoint_s": _midpoint(start_s, end_s),
+                        "offset_start_s": _offset(start_s, start_offset_s),
+                        "offset_end_s": _offset(end_s, start_offset_s),
+                        "offset_midpoint_s": _offset(_midpoint(start_s, end_s), start_offset_s),
+                        "absolute_start_s": _absolute(epoch, start_s),
+                        "absolute_end_s": _absolute(epoch, end_s),
+                        "duration_s": duration_s,
+                        "bytes": _float(stream_dict.get("bytes")),
+                        "transfer_mib": _bytes_to_mib(stream_dict.get("bytes")),
+                        "throughput_bps": _float(stream_dict.get("bits_per_second")),
+                        "throughput_mbps": _bps_to_mbps(stream_dict.get("bits_per_second")),
+                        "retransmits": _float(stream_dict.get("retransmits")),
+                        "cwnd_bytes": _float(stream_dict.get("snd_cwnd")),
+                        "cwnd_kib": _bytes_to_kib(stream_dict.get("snd_cwnd")),
+                        "rtt_us": _float(stream_dict.get("rtt")),
+                        "rtt_ms": _us_to_ms(stream_dict.get("rtt")),
+                        "rttvar_us": _float(stream_dict.get("rttvar")),
+                        "rttvar_ms": _us_to_ms(stream_dict.get("rttvar")),
+                        "pmtu_bytes": _float(stream_dict.get("pmtu")),
+                        "omitted": _bool(stream_dict.get("omitted")),
+                        "jitter_ms": _float(stream_dict.get("jitter_ms")),
+                        "lost_packets": _float(stream_dict.get("lost_packets")),
+                        "packets": _float(stream_dict.get("packets")),
+                        "lost_percent": _float(stream_dict.get("lost_percent")),
+                    },
+                    extra_metadata,
+                )
             )
 
     summary_records = _summary_records(
@@ -162,34 +184,38 @@ def parse_file(
         rtt_config_ms=rtt_config_ms,
         bottleneck_mbps=bottleneck_mbps,
         buffer_bdp=buffer_bdp,
+        extra_metadata=extra_metadata,
         connected=connected,
         stream_ordinals=stream_ordinals,
     )
 
-    run_record = {
-        "source_file": source_file,
-        "run_id": run_id,
-        "flow_id": flow_id,
-        "flow_label": flow_label,
-        "cc_algo": cc_algo,
-        "scenario": scenario,
-        "group": group,
-        "start_offset_s": start_offset_s,
-        "rtt_config_ms": rtt_config_ms,
-        "bottleneck_mbps": bottleneck_mbps,
-        "buffer_bdp": buffer_bdp,
-        "timestamp": timestamp.get("time"),
-        "epoch_s": epoch,
-        "protocol": protocol,
-        "num_streams": num_streams,
-        "reverse": reverse,
-        "duration_s": _float(test_start.get("duration")),
-        "omit_s": _float(test_start.get("omit")),
-        "block_size_bytes": _float(test_start.get("blksize")),
-        "tos": _float(test_start.get("tos")),
-        "local_host": _first_connected(connected, "local_host"),
-        "remote_host": _first_connected(connected, "remote_host"),
-    }
+    run_record = _with_extra_metadata(
+        {
+            "source_file": source_file,
+            "run_id": run_id,
+            "flow_id": flow_id,
+            "flow_label": flow_label,
+            "cc_algo": cc_algo,
+            "scenario": scenario,
+            "group": group,
+            "start_offset_s": start_offset_s,
+            "rtt_config_ms": rtt_config_ms,
+            "bottleneck_mbps": bottleneck_mbps,
+            "buffer_bdp": buffer_bdp,
+            "timestamp": timestamp.get("time"),
+            "epoch_s": epoch,
+            "protocol": protocol,
+            "num_streams": num_streams,
+            "reverse": reverse,
+            "duration_s": _float(test_start.get("duration")),
+            "omit_s": _float(test_start.get("omit")),
+            "block_size_bytes": _float(test_start.get("blksize")),
+            "tos": _float(test_start.get("tos")),
+            "local_host": _first_connected(connected, "local_host"),
+            "remote_host": _first_connected(connected, "remote_host"),
+        },
+        extra_metadata,
+    )
 
     return interval_records, summary_records, run_record
 
@@ -210,6 +236,7 @@ def _summary_records(
     rtt_config_ms: float | None,
     bottleneck_mbps: float | None,
     buffer_bdp: float | None,
+    extra_metadata: dict[str, Any],
     connected: dict[str, dict[str, Any]],
     stream_ordinals: dict[str, int],
 ) -> list[dict[str, Any]]:
@@ -225,25 +252,28 @@ def _summary_records(
             socket_key = _socket_key(socket, stream_position)
             stream_index = stream_ordinals.get(socket_key, stream_position + 1)
             records.append(
-                _summary_row(
-                    details,
-                    source_file=source_file,
-                    run_id=run_id,
-                    flow_id=flow_id,
-                    flow_label=flow_label,
-                    cc_algo=cc_algo,
-                    scenario=scenario,
-                    group=group,
-                    start_offset_s=start_offset_s,
-                    rtt_config_ms=rtt_config_ms,
-                    bottleneck_mbps=bottleneck_mbps,
-                    buffer_bdp=buffer_bdp,
-                    stream_id=f"{flow_id}:stream-{stream_index}",
-                    stream_index=stream_index,
-                    direction=direction,
-                    protocol=protocol,
-                    reverse=reverse,
-                    connected=connected.get(socket_key, {}),
+                _with_extra_metadata(
+                    _summary_row(
+                        details,
+                        source_file=source_file,
+                        run_id=run_id,
+                        flow_id=flow_id,
+                        flow_label=flow_label,
+                        cc_algo=cc_algo,
+                        scenario=scenario,
+                        group=group,
+                        start_offset_s=start_offset_s,
+                        rtt_config_ms=rtt_config_ms,
+                        bottleneck_mbps=bottleneck_mbps,
+                        buffer_bdp=buffer_bdp,
+                        stream_id=f"{flow_id}:stream-{stream_index}",
+                        stream_index=stream_index,
+                        direction=direction,
+                        protocol=protocol,
+                        reverse=reverse,
+                        connected=connected.get(socket_key, {}),
+                    ),
+                    extra_metadata,
                 )
             )
 
@@ -251,25 +281,28 @@ def _summary_records(
         details = _dict(end.get(key))
         if details:
             records.append(
-                _summary_row(
-                    details,
-                    source_file=source_file,
-                    run_id=run_id,
-                    flow_id=flow_id,
-                    flow_label=flow_label,
-                    cc_algo=cc_algo,
-                    scenario=scenario,
-                    group=group,
-                    start_offset_s=start_offset_s,
-                    rtt_config_ms=rtt_config_ms,
-                    bottleneck_mbps=bottleneck_mbps,
-                    buffer_bdp=buffer_bdp,
-                    stream_id=f"{flow_id}:aggregate",
-                    stream_index=0,
-                    direction=key,
-                    protocol=protocol,
-                    reverse=reverse,
-                    connected={},
+                _with_extra_metadata(
+                    _summary_row(
+                        details,
+                        source_file=source_file,
+                        run_id=run_id,
+                        flow_id=flow_id,
+                        flow_label=flow_label,
+                        cc_algo=cc_algo,
+                        scenario=scenario,
+                        group=group,
+                        start_offset_s=start_offset_s,
+                        rtt_config_ms=rtt_config_ms,
+                        bottleneck_mbps=bottleneck_mbps,
+                        buffer_bdp=buffer_bdp,
+                        stream_id=f"{flow_id}:aggregate",
+                        stream_index=0,
+                        direction=key,
+                        protocol=protocol,
+                        reverse=reverse,
+                        connected={},
+                    ),
+                    extra_metadata,
                 )
             )
 
@@ -438,6 +471,16 @@ def _midpoint(start_s: float | None, end_s: float | None) -> float | None:
     if start_s is None or end_s is None:
         return None
     return start_s + ((end_s - start_s) / 2)
+
+
+def _extra_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in metadata.items() if key not in KNOWN_METADATA_KEYS}
+
+
+def _with_extra_metadata(record: dict[str, Any], extra_metadata: dict[str, Any]) -> dict[str, Any]:
+    for key, value in extra_metadata.items():
+        record.setdefault(key, value)
+    return record
 
 
 def _add_global_elapsed_time(intervals: pd.DataFrame, runs: pd.DataFrame) -> None:

@@ -38,4 +38,10 @@ jobs:
           iperfplot all sample/my_test.json --out /tmp/iperfplot-sample --format png
           test -f /tmp/iperfplot-sample/report.html
           test -f /tmp/iperfplot-sample/data/flow_intervals.csv
+          test -f /tmp/iperfplot-sample/data/experiment_summary.csv
           test -f /tmp/iperfplot-sample/plots/throughput_flows.png
+
+      - name: Run custom plot spec
+        run: |
+          iperfplot custom sample/my_test.json --plot-spec examples/custom_plots.yaml --out /tmp/iperfplot-custom --format png
+          test -f /tmp/iperfplot-custom/rtt_cdf_by_flow.png

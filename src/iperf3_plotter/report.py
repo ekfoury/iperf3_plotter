@@ -11,6 +11,7 @@ import pandas as pd
 from . import __version__
 from .metrics import (
     choose_time_column,
+    experiment_summary,
     fairness_over_time,
     flow_aggregates,
     interval_summary,
@@ -41,6 +42,7 @@ def write_report(
     total_df = total_from_bins(flow_bins) if not flow_bins.empty else total_aggregate(flow_df, time_col) if not flow_df.empty else pd.DataFrame()
     stream_summary = interval_summary(intervals, "stream_id")
     flow_summary = interval_summary(flow_df, "flow_id") if not flow_df.empty else pd.DataFrame()
+    experiment_df = experiment_summary(flow_summary)
     flow_fairness = fairness_over_time(flow_bins, "flow_id", "time_bin_start_s") if not flow_bins.empty else pd.DataFrame()
     stream_fairness = fairness_over_time(stream_bins, "stream_id", "time_bin_start_s") if not stream_bins.empty else pd.DataFrame()
 
@@ -94,6 +96,8 @@ def write_report(
     <div class="table-wrap">{_table(runs)}</div>
     <h2>Flow Summary</h2>
     <div class="table-wrap">{_table(flow_summary)}</div>
+    <h2>Experiment Summary</h2>
+    <div class="table-wrap">{_table(experiment_df)}</div>
     <h2>Stream Summary</h2>
     <div class="table-wrap">{_table(stream_summary)}</div>
   </main>

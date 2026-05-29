@@ -8,6 +8,7 @@ warnings.filterwarnings("ignore", message="Pandas requires version .*", category
 import pandas as pd
 import typer
 
+from .custom import PlotSpecError, generate_custom_plots
 from .metrics import flow_aggregates, interval_summary, jain_fairness, series_similarity
 from .manifest import ManifestError, load_manifest
 from .outputs import write_tables
@@ -43,12 +44,14 @@ def plot_command(
     formats: list[str] = typer.Option(["png"], "--format", "-f", help="Plot format. Repeat for png/pdf/svg."),
     manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
     time_mode: str | None = typer.Option(None, "--time-mode", help="Use relative, global, offset, or wall time for the x-axis. Defaults to relative."),
+    plot_spec: Path | None = typer.Option(None, "--plot-spec", "--spec", exists=True, readable=True, dir_okay=False, help="Optional YAML/JSON file with custom plot definitions."),
 ) -> None:
     """Generate plots directly from iperf3 JSON."""
 
     time_mode = _prepare_time_mode(inputs, manifest, time_mode)
-    intervals, summaries, _runs = _parse_or_exit(inputs, manifest)
+    intervals, summaries, runs = _parse_or_exit(inputs, manifest)
     artifacts = generate_plots(intervals, summaries, out, formats=formats, time_mode=time_mode)
+    artifacts.extend(_custom_plots_or_exit(intervals, summaries, runs, out, plot_spec, formats, time_mode))
     typer.echo(f"Wrote {len(artifacts)} plot file(s) to {out}")
 
 
@@ -59,6 +62,7 @@ def report_command(
     formats: list[str] = typer.Option(["png"], "--format", "-f", help="Plot format. HTML reports use PNG assets."),
     manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
     time_mode: str | None = typer.Option(None, "--time-mode", help="Use relative, global, offset, or wall time for plots and metrics. Defaults to relative."),
+    plot_spec: Path | None = typer.Option(None, "--plot-spec", "--spec", exists=True, readable=True, dir_okay=False, help="Optional YAML/JSON file with custom plot definitions."),
 ) -> None:
     """Generate an HTML report with plots and summary tables."""
 
@@ -67,6 +71,7 @@ def report_command(
     asset_dir = out.with_suffix("").parent / f"{out.with_suffix('').name}_assets"
     plot_formats = _ensure_png(formats)
     artifacts = generate_plots(intervals, summaries, asset_dir, formats=plot_formats, time_mode=time_mode)
+    artifacts.extend(_custom_plots_or_exit(intervals, summaries, runs, asset_dir, plot_spec, plot_formats, time_mode))
     write_report(intervals, summaries, runs, artifacts, out, time_mode=time_mode)
     typer.echo(f"Wrote report to {out}")
 
@@ -78,6 +83,7 @@ def all_command(
     formats: list[str] = typer.Option(["png", "pdf"], "--format", "-f", help="Plot format. Repeat for png/pdf/svg."),
     manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
     time_mode: str | None = typer.Option(None, "--time-mode", help="Use relative, global, offset, or wall time for plots and metrics. Defaults to relative."),
+    plot_spec: Path | None = typer.Option(None, "--plot-spec", "--spec", exists=True, readable=True, dir_okay=False, help="Optional YAML/JSON file with custom plot definitions."),
 ) -> None:
     """Run the complete pipeline: parse, plot, and report."""
 
@@ -88,10 +94,28 @@ def all_command(
     report_path = out / "report.html"
     write_tables(intervals, summaries, runs, data_dir, time_mode=time_mode)
     artifacts = generate_plots(intervals, summaries, plots_dir, formats=formats, time_mode=time_mode)
+    artifacts.extend(_custom_plots_or_exit(intervals, summaries, runs, plots_dir, plot_spec, formats, time_mode))
     write_report(intervals, summaries, runs, artifacts, report_path, time_mode=time_mode)
     typer.echo(f"Wrote data to {data_dir}")
     typer.echo(f"Wrote {len(artifacts)} plot file(s) to {plots_dir}")
     typer.echo(f"Wrote report to {report_path}")
+
+
+@app.command("custom")
+def custom_command(
+    inputs: list[Path] = typer.Argument(..., exists=True, readable=True, dir_okay=False, help="iperf3 JSON file(s)."),
+    plot_spec: Path = typer.Option(..., "--plot-spec", "--spec", exists=True, readable=True, dir_okay=False, help="YAML/JSON file with custom plot definitions."),
+    out: Path = typer.Option(Path("plots"), "--out", "-o", help="Directory for generated custom plots."),
+    formats: list[str] = typer.Option(["png"], "--format", "-f", help="Plot format. Repeat for png/pdf/svg."),
+    manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
+    time_mode: str | None = typer.Option(None, "--time-mode", help="Use relative, global, offset, or wall time for derived tables. Defaults to relative."),
+) -> None:
+    """Generate only plots defined in a YAML/JSON plot specification."""
+
+    time_mode = _prepare_time_mode(inputs, manifest, time_mode)
+    intervals, summaries, runs = _parse_or_exit(inputs, manifest)
+    artifacts = _custom_plots_or_exit(intervals, summaries, runs, out, plot_spec, formats, time_mode)
+    typer.echo(f"Wrote {len(artifacts)} custom plot file(s) to {out}")
 
 
 @app.command("fairness")
@@ -161,6 +185,23 @@ def _parse_or_exit(inputs: list[Path], manifest: Path | None = None) -> tuple[pd
         metadata = load_manifest(manifest) if manifest else None
         return parse_files(inputs, metadata)
     except (IperfParseError, ManifestError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _custom_plots_or_exit(
+    intervals: pd.DataFrame,
+    summaries: pd.DataFrame,
+    runs: pd.DataFrame,
+    out: Path,
+    plot_spec: Path | None,
+    formats: list[str],
+    time_mode: str,
+) -> list:
+    if plot_spec is None:
+        return []
+    try:
+        return generate_custom_plots(intervals, summaries, runs, out, spec_path=plot_spec, formats=formats, time_mode=time_mode)
+    except PlotSpecError as exc:
         raise typer.BadParameter(str(exc)) from exc
 
 
