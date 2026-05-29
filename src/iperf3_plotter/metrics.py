@@ -363,23 +363,28 @@ def fairness_over_time(df: pd.DataFrame, entity_col: str, time_col: str) -> pd.D
     if df.empty or entity_col not in df.columns or "throughput_bps" not in df.columns:
         return pd.DataFrame()
 
+    group_cols = _fairness_group_columns(df, entity_col, time_col)
+    grouping = [*group_cols, time_col]
     records = []
-    for time_value, group in df.groupby(time_col, dropna=False):
+    for key, group in df.groupby(grouping, dropna=False):
+        key_values = key if isinstance(key, tuple) else (key,)
+        metadata_values = key_values[: len(group_cols)]
+        time_value = key_values[-1]
         values = group["throughput_bps"].fillna(0)
         total = float(values.sum())
         active = len(group)
-        records.append(
-            {
-                time_col: time_value,
-                "active_entities": active,
-                "total_throughput_mbps": total / 1_000_000,
-                "jain_fairness": jain_fairness(values),
-                "fair_share_mbps": (total / active / 1_000_000) if active else None,
-                "min_share_percent": _min_share_percent(values),
-                "max_share_percent": _max_share_percent(values),
-            }
-        )
-    return pd.DataFrame.from_records(records).sort_values(time_col)
+        record = {
+            time_col: time_value,
+            "active_entities": active,
+            "total_throughput_mbps": total / 1_000_000,
+            "jain_fairness": jain_fairness(values),
+            "fair_share_mbps": (total / active / 1_000_000) if active else None,
+            "min_share_percent": _min_share_percent(values),
+            "max_share_percent": _max_share_percent(values),
+        }
+        record.update(dict(zip(group_cols, metadata_values)))
+        records.append(record)
+    return pd.DataFrame.from_records(records).sort_values(grouping)
 
 
 def bandwidth_share(df: pd.DataFrame, entity_col: str, time_col: str) -> pd.DataFrame:
@@ -576,9 +581,40 @@ def _experiment_group_columns(flow_summary: pd.DataFrame) -> list[str]:
             "reverse",
             "num_streams",
             "start_offset_s",
+            "rtt_config_ms",
         }
     )
     return _first_value_columns(flow_summary, excluded)
+
+
+def _fairness_group_columns(df: pd.DataFrame, entity_col: str, time_col: str) -> list[str]:
+    excluded = (
+        MEASUREMENT_COLUMNS
+        | STREAM_DETAIL_COLUMNS
+        | {
+            entity_col,
+            time_col,
+            "source_file",
+            "run_id",
+            "flow_id",
+            "flow_label",
+            "stream_id",
+            "cc_algo",
+            "protocol",
+            "reverse",
+            "num_streams",
+            "start_offset_s",
+            "rtt_config_ms",
+            "time_bin_index",
+            "time_bin_start_s",
+            "time_bin_end_s",
+            "time_bin_midpoint_s",
+            "throughput_bps",
+            "throughput_mbps",
+            "omitted",
+        }
+    )
+    return _first_value_columns(df, excluded)
 
 
 def _first_non_null(series: pd.Series) -> object:

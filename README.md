@@ -296,26 +296,6 @@ For a detailed, end-to-end guide with JSON snippets, manifests, generated
 figures, and BBRv3-style experiment workflows, see
 [docs/research_workflows.md](docs/research_workflows.md).
 
-### Reproduce BBRv3 Paper Figures
-
-This repository includes an example script that regenerates selected figures
-from the public BBRv3 experiment repository instead of using toy sample data.
-It downloads the needed upstream JSON/`.dat` artifacts on demand and caches
-them under `.cache/bbr3-paper`.
-
-```bash
-python3 examples/reproduce_bbr3_paper.py --out docs/images/bbr3
-```
-
-Generated examples:
-
-| Throughput vs RTT | Staggered Flow Fairness |
-| --- | --- |
-| ![BBRv3 paper throughput vs RTT](docs/images/bbr3/bbr3_paper_throughput_rtt.png) | ![BBRv3 paper staggered flow fairness](docs/images/bbr3/bbr3_paper_fairness_time.png) |
-
-See [docs/research_workflows.md](docs/research_workflows.md#reproducing-bbrv3-paper-figures)
-for the full regenerated figure gallery and the supported `--figure` options.
-
 ### Custom Plot Specs
 
 For research sweeps, put experiment metadata in the manifest and describe plots
@@ -436,16 +416,22 @@ Useful plot sources:
 - `experiment_summary`: one row per experiment condition, with total throughput, Jain fairness, link utilization, and per-`cc_algo` shares
 
 See `examples/custom_plots.yaml` for a runnable sample spec and
-`examples/paper_style_plots.yaml` for sweep plots that expect manifest columns
-such as `propagation_delay_ms`, `bottleneck_mbps`, `buffer_bdp`, and
-`loss_percent`.
+`examples/bbr3_showcase_plots.yaml` for BBRv3 paper-style plot recipes that
+expect manifest columns such as `scenario`, `rtt_ms`, `buffer_bdp`,
+`loss_percent`, `bottleneck_mbps`, `aqm`, and `start_offset_s`. A copyable
+manifest template is available at `examples/bbr3_showcase_manifest.example.csv`.
 
 ### Paper-Style Scenario Specs
 
-`examples/paper_style_plots.yaml` is a scenario catalog inspired by the plots in
-Kfoury et al., "Performance Evaluation of TCP BBRv2 Alpha for Wired Broadband,
-considering Buffer Sizes, Packet Loss Rates, RTTs, and Number of Flows"
-([PDF](https://gomezgaona.github.io/online-cv/assets/pdfs/1-s2.0-S014036642030092X-main.pdf)).
+`examples/bbr3_showcase_plots.yaml` is a copyable BBRv3-style recipe file. It
+shows how to express paper-style plots using only a manifest plus a plot spec:
+throughput vs RTT, retransmissions vs RTT, loss sensitivity, RTT unfairness,
+staggered starts, FCT CDFs, and bandwidth-delay heatmaps.
+
+`examples/paper_style_plots.yaml` is a broader scenario catalog inspired by the
+plots in Kfoury et al., "Performance Evaluation of TCP BBRv2 Alpha for Wired
+Broadband, considering Buffer Sizes, Packet Loss Rates, RTTs, and Number of
+Flows" ([PDF](https://gomezgaona.github.io/online-cv/assets/pdfs/1-s2.0-S014036642030092X-main.pdf)).
 
 The file includes templates for these experiment families:
 
@@ -464,8 +450,8 @@ The file includes templates for these experiment families:
 Typical manifest columns for these specs:
 
 ```csv
-file,flow_id,cc_algo,tested_cc_algo,cc_mix,buffer_bdp,loss_percent,num_flows,num_cubic_flows,num_bbrv2_flows,propagation_delay_ms,bottleneck_mbps,aqm,trial,start_offset_s
-run1.json,flow1,cubic,cubic,cubic_only,1,0,100,100,0,100,1000,taildrop,1,0
+file,flow_id,scenario,cc_algo,cc_mix,buffer_bdp,loss_percent,rtt_ms,bottleneck_mbps,aqm,trial,start_offset_s
+run1.json,flow1,rtt_sweep,cubic,cubic_vs_bbrv3,1,0.025,20,1000,taildrop,1,0
 ```
 
 ### Time Modes

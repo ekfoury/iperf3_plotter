@@ -142,6 +142,32 @@ class ParserMetricsTest(unittest.TestCase):
             self.assertEqual(overlap.iloc[0]["active_entities"], 2)
             self.assertGreater(overlap.iloc[0]["total_throughput_mbps"], 0)
 
+    def test_fairness_over_time_keeps_experiment_metadata_separate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            paths = []
+            metadata = {}
+            for scenario in ("rtt_sweep", "loss_sweep"):
+                for flow_index in (1, 2):
+                    path = temp_path / f"{scenario}_flow{flow_index}.json"
+                    shutil.copyfile(SAMPLE, path)
+                    paths.append(path)
+                    metadata[path.name] = {
+                        "flow_id": f"{scenario}_flow{flow_index}",
+                        "scenario": scenario,
+                        "trial": 1,
+                        "rtt_ms": 20 if flow_index == 1 else 100,
+                        "start_offset_s": 0,
+                    }
+
+            intervals, _summaries, _runs = parse_files(paths, metadata)
+            flow_bins = resample_time_bins(flow_aggregates(intervals), entity_col="flow_id", time_mode="offset")
+            fairness = fairness_over_time(flow_bins, "flow_id", "time_bin_start_s")
+            first_bin = fairness[fairness["time_bin_start_s"].eq(0.0)]
+
+            self.assertEqual(set(first_bin["scenario"]), {"rtt_sweep", "loss_sweep"})
+            self.assertTrue((first_bin["active_entities"] == 2).all())
+
     def test_warns_for_implicit_relative_time_with_multiple_inputs(self) -> None:
         warning = _relative_time_warning([Path("client1.json"), Path("client2.json")], None, "relative", False)
 

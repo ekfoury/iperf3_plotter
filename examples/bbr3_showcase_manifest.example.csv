@@ -1,0 +1,16 @@
+file,flow_id,flow_label,scenario,cc_algo,cc_mix,aqm,trial,start_offset_s,rtt_ms,buffer_bdp,loss_percent,bottleneck_mbps,propagation_delay_ms,num_flows,num_cubic_flows,num_bbrv3_flows,transfer_size_mb
+runs/rtt_sweep/cubic_rtt2_trial1.json,cubic_rtt2_t1,CUBIC 2 ms,rtt_sweep,cubic,cubic_vs_bbrv3,taildrop,1,0,2,1,0.025,1000,2,2,1,1,
+runs/rtt_sweep/bbrv3_rtt2_trial1.json,bbrv3_rtt2_t1,BBRv3 2 ms,rtt_sweep,bbrv3,cubic_vs_bbrv3,taildrop,1,0,2,1,0.025,1000,2,2,1,1,
+runs/rtt_sweep/cubic_rtt20_trial1.json,cubic_rtt20_t1,CUBIC 20 ms,rtt_sweep,cubic,cubic_vs_bbrv3,taildrop,1,0,20,1,0.025,1000,20,2,1,1,
+runs/rtt_sweep/bbrv3_rtt20_trial1.json,bbrv3_rtt20_t1,BBRv3 20 ms,rtt_sweep,bbrv3,cubic_vs_bbrv3,taildrop,1,0,20,1,0.025,1000,20,2,1,1,
+runs/loss_sweep/bbrv3_loss001_trial1.json,bbrv3_loss001_t1,BBRv3 0.01% loss,loss_sweep,bbrv3,bbrv3_only,taildrop,1,0,20,1,0.01,1000,20,1,0,1,
+runs/loss_sweep/bbrv3_loss1_trial1.json,bbrv3_loss1_t1,BBRv3 1% loss,loss_sweep,bbrv3,bbrv3_only,taildrop,1,0,20,1,1,1000,20,1,0,1,
+runs/rtt_unfairness/h1_20ms_bdp1_taildrop.json,bbrv3_20ms_bdp1,BBRv3 20 ms,rtt_unfairness,bbrv3,bbrv3_only,taildrop,1,0,20,1,0,1000,20,2,0,2,
+runs/rtt_unfairness/h2_100ms_bdp1_taildrop.json,bbrv3_100ms_bdp1,BBRv3 100 ms,rtt_unfairness,bbrv3,bbrv3_only,taildrop,1,0,100,1,0,1000,100,2,0,2,
+runs/rtt_unfairness/h1_20ms_bdp1_fqcodel.json,bbrv3_20ms_bdp1_fq,BBRv3 20 ms,rtt_unfairness,bbrv3,bbrv3_only,fq_codel,1,0,20,1,0,1000,20,2,0,2,
+runs/rtt_unfairness/h2_100ms_bdp1_fqcodel.json,bbrv3_100ms_bdp1_fq,BBRv3 100 ms,rtt_unfairness,bbrv3,bbrv3_only,fq_codel,1,0,100,1,0,1000,100,2,0,2,
+runs/staggered/h1_cubic.json,cubic_long,CUBIC flow,staggered_coexistence,cubic,cubic_vs_bbrv3,taildrop,1,0,20,1,0,1000,20,6,1,5,
+runs/staggered/h2_bbrv3.json,bbrv3_1,BBRv3 flow 1,staggered_coexistence,bbrv3,cubic_vs_bbrv3,taildrop,1,60,20,1,0,1000,20,6,1,5,
+runs/staggered/h3_bbrv3.json,bbrv3_2,BBRv3 flow 2,staggered_coexistence,bbrv3,cubic_vs_bbrv3,taildrop,1,120,20,1,0,1000,20,6,1,5,
+runs/fct/cubic_10mb_trial1.json,cubic_fct_t1,CUBIC short flow,fct,cubic,cubic_vs_bbrv3,taildrop,1,0,20,1,0,1000,20,2,1,1,10
+runs/fct/bbrv3_10mb_trial1.json,bbrv3_fct_t1,BBRv3 short flow,fct,bbrv3,cubic_vs_bbrv3,taildrop,1,0,20,1,0,1000,20,2,1,1,10

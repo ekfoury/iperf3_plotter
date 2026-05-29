@@ -1,0 +1,191 @@
+# BBRv3 paper-style showcase plots.
+#
+# Use this with a manifest that adds experiment metadata to each iperf3 JSON:
+#
+#   iperfplot all runs/**/*.json \
+#     --manifest manifest.csv \
+#     --plot-spec examples/bbr3_showcase_plots.yaml \
+#     --time-mode offset \
+#     --out results/bbr3-showcase
+#
+# The matching manifest template is:
+#
+#   examples/bbr3_showcase_manifest.example.csv
+
+plots:
+  - name: throughput_vs_rtt
+    kind: line
+    source: flow_summary
+    filters:
+      scenario: rtt_sweep
+    x: rtt_config_ms
+    y: avg_throughput_mbps
+    group_by: cc_algo
+    aggregate: mean
+    marker: o
+    title: Throughput as a function of RTT
+    x_label: Configured RTT (ms)
+    y_label: Average throughput (Mbps)
+    colors:
+      cubic: "#2D72B7"
+      bbrv3: "#95253B"
+    figsize: [7.2, 5.0]
+
+  - name: retransmits_vs_rtt
+    kind: line
+    source: flow_summary
+    filters:
+      scenario: rtt_sweep
+    x: rtt_config_ms
+    y: retransmits
+    group_by: cc_algo
+    aggregate: mean
+    marker: o
+    title: Retransmissions as a function of RTT
+    x_label: Configured RTT (ms)
+    y_label: Retransmissions (packets)
+    colors:
+      cubic: "#2D72B7"
+      bbrv3: "#95253B"
+    figsize: [7.2, 5.0]
+
+  - name: throughput_vs_loss
+    kind: line
+    source: flow_summary
+    filters:
+      scenario: loss_sweep
+    x: loss_percent
+    y: avg_throughput_mbps
+    group_by: cc_algo
+    aggregate: mean
+    marker: o
+    log_x: true
+    title: Throughput as a function of random loss
+    x_label: Random packet loss (%)
+    y_label: Average throughput (Mbps)
+    colors:
+      cubic: "#2D72B7"
+      bbrv3: "#95253B"
+    figsize: [7.2, 5.0]
+
+  - name: retransmits_vs_loss
+    kind: line
+    source: flow_summary
+    filters:
+      scenario: loss_sweep
+    x: loss_percent
+    y: retransmits
+    group_by: cc_algo
+    aggregate: mean
+    marker: o
+    log_x: true
+    log_y: true
+    title: Retransmissions as a function of random loss
+    x_label: Random packet loss (%)
+    y_label: Retransmissions (packets)
+    colors:
+      cubic: "#2D72B7"
+      bbrv3: "#95253B"
+    figsize: [7.2, 5.0]
+
+  - name: rtt_unfairness_throughput_vs_buffer
+    kind: line
+    source: flow_summary
+    filters:
+      scenario: rtt_unfairness
+    x: buffer_bdp
+    y: avg_throughput_mbps
+    group_by: rtt_config_ms
+    facet_by: aqm
+    aggregate: mean
+    marker: o
+    log_x: true
+    title: Throughput by RTT class and buffer size
+    x_label: Buffer size (BDP)
+    y_label: Average throughput (Mbps)
+    palette: tab10
+    figsize: [7.2, 5.0]
+
+  - name: rtt_unfairness_fairness_vs_buffer
+    kind: line
+    source: experiment_summary
+    filters:
+      scenario: rtt_unfairness
+    x: buffer_bdp
+    y: jain_fairness
+    group_by: aqm
+    aggregate: mean
+    marker: o
+    log_x: true
+    title: RTT fairness as a function of buffer size
+    x_label: Buffer size (BDP)
+    y_label: Jain fairness
+    ylim: [0, 1.05]
+    palette: Set2
+    figsize: [7.2, 5.0]
+
+  - name: staggered_flow_throughput
+    kind: time_series
+    source: flow_time_bins
+    filters:
+      scenario: staggered_coexistence
+    x: time_bin_start_s
+    y: throughput_mbps
+    group_by: flow_label
+    aggregate: mean
+    title: Throughput with staggered flow starts
+    x_label: Experiment time (s)
+    y_label: Throughput (Mbps)
+    palette: tab10
+    figsize: [9.0, 5.0]
+
+  - name: staggered_flow_fairness
+    kind: line
+    source: flow_fairness
+    filters:
+      scenario: staggered_coexistence
+    x: time_bin_start_s
+    y: jain_fairness
+    aggregate: mean
+    title: Fairness with staggered flow starts
+    x_label: Experiment time (s)
+    y_label: Jain fairness
+    ylim: [0, 1.05]
+    color: "#E5B245"
+    figsize: [9.0, 4.2]
+
+  - name: fct_cdf_by_cc
+    kind: cdf
+    source: flow_summary
+    filters:
+      scenario: fct
+    metric: duration_s
+    group_by: cc_algo
+    title: Flow completion time CDF
+    x_label: Flow completion time (s)
+    colors:
+      cubic: "#2D72B7"
+      bbrv3: "#95253B"
+    figsize: [7.2, 5.0]
+
+  - name: fairness_heatmap_bandwidth_delay
+    kind: heatmap
+    source: experiment_summary
+    x: propagation_delay_ms
+    y: bottleneck_mbps
+    value: jain_fairness
+    facet_by:
+      - scenario
+      - buffer_bdp
+      - loss_percent
+    annotations:
+      - link_utilization_percent
+      - share_cubic_percent
+      - share_bbrv3_percent
+    title: Fairness over bandwidth-delay conditions
+    x_label: Configured RTT or propagation delay (ms)
+    y_label: Bottleneck bandwidth (Mbps)
+    cmap: YlGnBu
+    annotation_color: black
+    annotation_fontsize: 7
+    figsize: [8.5, 6.4]
