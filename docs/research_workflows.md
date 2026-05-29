@@ -123,6 +123,60 @@ PYTHONPATH=src python3 -m iperf3_plotter custom \
   --format png
 ```
 
+## Reproducing BBRv3 Paper Figures
+
+The gallery above is intentionally small and uses this repository's sample
+JSON. To regenerate figures from the BBRv3 paper data itself, use the dedicated
+example script:
+
+```bash
+python3 examples/reproduce_bbr3_paper.py --out docs/images/bbr3
+```
+
+The script downloads the needed upstream files from
+<https://github.com/gomezgaona/bbr3/tree/main/experiments>, caches them under
+`.cache/bbr3-paper`, and writes regenerated figures into `docs/images/bbr3`.
+It does not vendor the upstream JSON or `.dat` files into this repository.
+
+Supported paper figure families:
+
+| Option | Upstream experiment | Regenerated plots |
+| --- | --- | --- |
+| `--figure dmz` | `experiments/DMZ` | throughput vs RTT, retransmissions vs RTT |
+| `--figure retrans-loss` | `experiments/retrans_loss` | throughput vs loss, retransmissions vs loss |
+| `--figure rtt-unfairness` | `experiments/RTT_Unfairness` | fairness and per-flow throughput vs buffer size, with and without FQ-CoDel |
+| `--figure fairness-time` | `experiments/fairness_time` | fairness and throughput over staggered flow start times |
+| `--figure queue-occupancy` | `experiments/q_occupancy` | queue occupancy and buffer-size behavior over time |
+
+You can generate one family at a time:
+
+```bash
+python3 examples/reproduce_bbr3_paper.py \
+  --figure dmz \
+  --figure retrans-loss \
+  --out bbr3-paper-figures
+```
+
+These are regenerated from the public experiment outputs using the same metric
+definitions as the upstream plotting scripts, not screenshots copied from the
+paper.
+
+| Throughput vs RTT | Retransmissions vs RTT |
+| --- | --- |
+| ![BBRv3 paper throughput vs RTT](images/bbr3/bbr3_paper_throughput_rtt.png) | ![BBRv3 paper retransmissions vs RTT](images/bbr3/bbr3_paper_retrans_rtt.png) |
+
+| Throughput vs Loss | Retransmissions vs Loss |
+| --- | --- |
+| ![BBRv3 paper throughput vs loss](images/bbr3/bbr3_paper_throughput_loss.png) | ![BBRv3 paper retransmissions vs loss](images/bbr3/bbr3_paper_retrans_loss.png) |
+
+| RTT Unfairness | RTT Unfairness With FQ-CoDel |
+| --- | --- |
+| ![BBRv3 paper RTT unfairness](images/bbr3/bbr3_paper_rtt_unfairness.png) | ![BBRv3 paper RTT unfairness with FQ-CoDel](images/bbr3/bbr3_paper_rtt_unfairness_fq_codel.png) |
+
+| Staggered Flow Fairness | Queue Occupancy |
+| --- | --- |
+| ![BBRv3 paper staggered flow fairness](images/bbr3/bbr3_paper_fairness_time.png) | ![BBRv3 paper queue occupancy](images/bbr3/bbr3_paper_queue_occupancy.png) |
+
 ## Scenario 1: Single Run With Parallel Streams
 
 Use this when one iperf client generated multiple parallel TCP streams with
@@ -349,14 +403,20 @@ Useful specs:
 
 ## Working With the BBRv3 Repository
 
-The BBRv3 repository is useful as a model for experiment organization. For
-example:
+The BBRv3 repository is useful as a model for experiment organization and as a
+source of public experiment artifacts. For example:
 
 - `experiments/CDF_BBR` contains CDF-oriented artifacts and an iperf JSON file
   named `out1.json`.
 - `experiments/retrans_loss` contains a `json_files` directory and scripts for
   loss/retransmission experiments.
 - `experiments/RTT_Unfairness` contains RTT unfairness scripts and PDF outputs.
+
+For the exact reproduced examples shown above, run:
+
+```bash
+python3 examples/reproduce_bbr3_paper.py --out docs/images/bbr3
+```
 
 If you have raw iperf JSON files from that repository or from a reproduced run,
 create a manifest that adds the missing experiment metadata, then run:
@@ -370,8 +430,9 @@ iperfplot all path/to/jsons/*.json \
 ```
 
 If a repository directory contains only `.dat` files or PDFs, those are already
-post-processed artifacts. `iperf3_plotter` does not currently import arbitrary
-`.dat` formats; it is designed to start from iperf3 JSON.
+post-processed artifacts. The main `iperfplot` workflow is designed to start
+from iperf3 JSON; paper-specific `.dat` handling lives in
+`examples/reproduce_bbr3_paper.py`.
 
 ## Checklist
 
