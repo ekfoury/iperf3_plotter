@@ -16,6 +16,7 @@ from .plots import generate_plots
 from .report import write_report
 
 app = typer.Typer(no_args_is_help=True, help="Analyze and plot iperf3 JSON results.")
+VALID_TIME_MODES = {"relative", "global", "offset", "wall"}
 
 
 @app.command("parse")
@@ -23,10 +24,11 @@ def parse_command(
     inputs: list[Path] = typer.Argument(..., exists=True, readable=True, dir_okay=False, help="iperf3 JSON file(s)."),
     out: Path = typer.Option(Path("data"), "--out", "-o", help="Directory for normalized CSV outputs."),
     manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
-    time_mode: str = typer.Option("relative", "--time-mode", help="Use relative, global, offset, or wall time when computing derived tables."),
+    time_mode: str | None = typer.Option(None, "--time-mode", help="Use relative, global, offset, or wall time when computing derived tables. Defaults to relative."),
 ) -> None:
     """Normalize iperf3 JSON into CSV tables."""
 
+    time_mode = _prepare_time_mode(inputs, manifest, time_mode)
     intervals, summaries, runs = _parse_or_exit(inputs, manifest)
     files = write_tables(intervals, summaries, runs, out, time_mode=time_mode)
     typer.echo(f"Wrote normalized tables to {out}")
@@ -40,10 +42,11 @@ def plot_command(
     out: Path = typer.Option(Path("plots"), "--out", "-o", help="Directory for generated plots."),
     formats: list[str] = typer.Option(["png"], "--format", "-f", help="Plot format. Repeat for png/pdf/svg."),
     manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
-    time_mode: str = typer.Option("relative", "--time-mode", help="Use relative, global, offset, or wall time for the x-axis."),
+    time_mode: str | None = typer.Option(None, "--time-mode", help="Use relative, global, offset, or wall time for the x-axis. Defaults to relative."),
 ) -> None:
     """Generate plots directly from iperf3 JSON."""
 
+    time_mode = _prepare_time_mode(inputs, manifest, time_mode)
     intervals, summaries, _runs = _parse_or_exit(inputs, manifest)
     artifacts = generate_plots(intervals, summaries, out, formats=formats, time_mode=time_mode)
     typer.echo(f"Wrote {len(artifacts)} plot file(s) to {out}")
@@ -55,10 +58,11 @@ def report_command(
     out: Path = typer.Option(Path("report.html"), "--out", "-o", help="HTML report path."),
     formats: list[str] = typer.Option(["png"], "--format", "-f", help="Plot format. HTML reports use PNG assets."),
     manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
-    time_mode: str = typer.Option("relative", "--time-mode", help="Use relative, global, offset, or wall time for plots and metrics."),
+    time_mode: str | None = typer.Option(None, "--time-mode", help="Use relative, global, offset, or wall time for plots and metrics. Defaults to relative."),
 ) -> None:
     """Generate an HTML report with plots and summary tables."""
 
+    time_mode = _prepare_time_mode(inputs, manifest, time_mode)
     intervals, summaries, runs = _parse_or_exit(inputs, manifest)
     asset_dir = out.with_suffix("").parent / f"{out.with_suffix('').name}_assets"
     plot_formats = _ensure_png(formats)
@@ -73,10 +77,11 @@ def all_command(
     out: Path = typer.Option(Path("results"), "--out", "-o", help="Output directory."),
     formats: list[str] = typer.Option(["png", "pdf"], "--format", "-f", help="Plot format. Repeat for png/pdf/svg."),
     manifest: Path | None = typer.Option(None, "--manifest", "-m", exists=True, readable=True, dir_okay=False, help="Optional JSON/CSV experiment manifest."),
-    time_mode: str = typer.Option("relative", "--time-mode", help="Use relative, global, offset, or wall time for plots and metrics."),
+    time_mode: str | None = typer.Option(None, "--time-mode", help="Use relative, global, offset, or wall time for plots and metrics. Defaults to relative."),
 ) -> None:
     """Run the complete pipeline: parse, plot, and report."""
 
+    time_mode = _prepare_time_mode(inputs, manifest, time_mode)
     intervals, summaries, runs = _parse_or_exit(inputs, manifest)
     data_dir = out / "data"
     plots_dir = out / "plots"
@@ -157,6 +162,42 @@ def _parse_or_exit(inputs: list[Path], manifest: Path | None = None) -> tuple[pd
         return parse_files(inputs, metadata)
     except (IperfParseError, ManifestError) as exc:
         raise typer.BadParameter(str(exc)) from exc
+
+
+def _prepare_time_mode(inputs: list[Path], manifest: Path | None, time_mode: str | None) -> str:
+    explicit_time_mode = time_mode is not None
+    mode = (time_mode or "relative").strip().lower()
+    if mode not in VALID_TIME_MODES:
+        valid = ", ".join(sorted(VALID_TIME_MODES))
+        raise typer.BadParameter(f"--time-mode must be one of: {valid}")
+
+    warning = _relative_time_warning(inputs, manifest, mode, explicit_time_mode)
+    if warning:
+        typer.echo(warning, err=True)
+    return mode
+
+
+def _relative_time_warning(
+    inputs: list[Path],
+    manifest: Path | None,
+    time_mode: str,
+    explicit_time_mode: bool,
+) -> str | None:
+    if explicit_time_mode or time_mode != "relative" or len(inputs) <= 1:
+        return None
+    if manifest:
+        return (
+            "Warning: multiple JSON files are using default --time-mode relative, "
+            "so each file starts at X=0. Use --time-mode offset with your manifest "
+            "to preserve staggered starts, or --time-mode global if JSON timestamps "
+            "are synchronized."
+        )
+    return (
+        "Warning: multiple JSON files are using default --time-mode relative, "
+        "so each file starts at X=0. Use --time-mode global to align by iperf3 "
+        "timestamps, or pass a manifest with --time-mode offset when clocks are "
+        "not synchronized."
+    )
 
 
 def _ensure_png(formats: list[str]) -> list[str]:

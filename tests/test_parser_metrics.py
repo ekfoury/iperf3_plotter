@@ -13,6 +13,7 @@ from iperf3_plotter.metrics import (
     resample_time_bins,
     series_similarity,
 )
+from iperf3_plotter.cli import _relative_time_warning
 from iperf3_plotter.parser import parse_files
 
 
@@ -140,6 +141,18 @@ class ParserMetricsTest(unittest.TestCase):
 
             self.assertEqual(overlap.iloc[0]["active_entities"], 2)
             self.assertGreater(overlap.iloc[0]["total_throughput_mbps"], 0)
+
+    def test_warns_for_implicit_relative_time_with_multiple_inputs(self) -> None:
+        warning = _relative_time_warning([Path("client1.json"), Path("client2.json")], None, "relative", False)
+
+        self.assertIsNotNone(warning)
+        self.assertIn("--time-mode global", warning or "")
+        self.assertIn("manifest", warning or "")
+
+    def test_no_warning_when_relative_time_is_explicit(self) -> None:
+        warning = _relative_time_warning([Path("client1.json"), Path("client2.json")], None, "relative", True)
+
+        self.assertIsNone(warning)
 
 
 if __name__ == "__main__":

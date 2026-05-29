@@ -293,6 +293,11 @@ Experiment-level plots include:
 - `offset`: use `start_offset_s` values from a manifest
 - `wall`: use raw Unix time from iperf3 timestamps
 
+If you pass multiple JSON files and do not set `--time-mode`, `iperfplot`
+warns before using the default `relative` mode. For staggered clients, use
+`--time-mode global` when client clocks are synchronized, or use a manifest
+with `--time-mode offset` when you know the intended start offsets.
+
 Examples:
 
 ```bash
