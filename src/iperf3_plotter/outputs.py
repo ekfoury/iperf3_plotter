@@ -59,7 +59,7 @@ def write_tables(
     files["stream_summary"] = out_dir / "stream_summary.csv"
     stream_summary.to_csv(files["stream_summary"], index=False)
 
-    stream_similarity = series_similarity(intervals)
+    stream_similarity = series_similarity(intervals, max_pairs=5000)
     files["stream_similarity"] = out_dir / "stream_similarity.csv"
     stream_similarity.to_csv(files["stream_similarity"], index=False)
 

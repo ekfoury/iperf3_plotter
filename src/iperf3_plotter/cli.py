@@ -9,6 +9,7 @@ import pandas as pd
 import typer
 
 from .custom import PlotSpecError, generate_custom_plots
+from .experiment import ExperimentError, run_experiment, validate_experiment
 from .metrics import flow_aggregates, interval_summary, jain_fairness, series_similarity
 from .manifest import ManifestError, load_manifest
 from .outputs import write_tables
@@ -116,6 +117,42 @@ def custom_command(
     intervals, summaries, runs = _parse_or_exit(inputs, manifest)
     artifacts = _custom_plots_or_exit(intervals, summaries, runs, out, plot_spec, formats, time_mode)
     typer.echo(f"Wrote {len(artifacts)} custom plot file(s) to {out}")
+
+
+@app.command("experiment")
+def experiment_command(
+    config: Path = typer.Argument(..., exists=True, readable=True, dir_okay=False, help="Experiment YAML/JSON file."),
+    out: Path = typer.Option(Path("results"), "--out", "-o", help="Output directory."),
+    formats: list[str] = typer.Option(["png", "pdf"], "--format", "-f", help="Plot format. Repeat for png/pdf/svg."),
+) -> None:
+    """Run parse, plot, and report from one experiment file."""
+
+    try:
+        result = run_experiment(config, out, formats=formats)
+    except ExperimentError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    typer.echo(f"Resolved {len(result.plan.files)} input JSON file(s) from {result.plan.config_path}")
+    typer.echo(f"Using time mode: {result.plan.time_mode}")
+    typer.echo(f"Wrote data to {result.data_dir}")
+    typer.echo(f"Wrote {len(result.artifacts)} plot file(s) to {result.plots_dir}")
+    typer.echo(f"Wrote report to {result.report_path}")
+
+
+@app.command("validate")
+def validate_command(
+    config: Path = typer.Argument(..., exists=True, readable=True, dir_okay=False, help="Experiment YAML/JSON file."),
+) -> None:
+    """Validate an experiment file before running it."""
+
+    try:
+        warnings = validate_experiment(config)
+    except ExperimentError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    typer.echo(f"OK: {config}")
+    for warning in warnings:
+        typer.echo(f"Warning: {warning}", err=True)
 
 
 @app.command("fairness")

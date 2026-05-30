@@ -482,6 +482,7 @@ def series_similarity(
     entity_col: str = "stream_id",
     time_col: str = "interval_index",
     metrics: list[str] | None = None,
+    max_pairs: int | None = None,
 ) -> pd.DataFrame:
     """Compare entity time series to identify truly overlapping lines."""
 
@@ -504,7 +505,9 @@ def series_similarity(
         pivot = df.pivot_table(index=time_col, columns=entity_col, values=metric, aggfunc="mean")
         if pivot.shape[1] < 2:
             continue
-        for left, right in combinations(pivot.columns, 2):
+        for pair_index, (left, right) in enumerate(combinations(pivot.columns, 2)):
+            if max_pairs is not None and pair_index >= max_pairs:
+                break
             pair = pivot[[left, right]].dropna()
             if pair.empty:
                 continue

@@ -70,6 +70,21 @@ def generate_custom_plots(
     """Render user-defined plots from normalized and derived iperf3 tables."""
 
     specs = load_plot_specs(spec_path)
+    return generate_custom_plots_from_specs(intervals, summaries, runs, out_dir, specs=specs, formats=formats, time_mode=time_mode)
+
+
+def generate_custom_plots_from_specs(
+    intervals: pd.DataFrame,
+    summaries: pd.DataFrame,
+    runs: pd.DataFrame,
+    out_dir: Path,
+    *,
+    specs: list[dict[str, Any]],
+    formats: list[str] | None = None,
+    time_mode: str = "relative",
+) -> list[PlotArtifact]:
+    """Render user-defined plots from an already loaded specification list."""
+
     sources = build_plot_sources(intervals, summaries, runs, time_mode=time_mode)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

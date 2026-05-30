@@ -1,0 +1,39 @@
+name: sample_experiment
+time_mode: relative
+
+inputs:
+  runs:
+    - file: ../sample/my_test.json
+      flow_id: sample_flow
+      flow_label: Sample flow
+      cc_algo: cubic
+      scenario: smoke_test
+      trial: 1
+
+plots:
+  - name: sample_throughput
+    type: time_series
+    data:
+      source: flow_time_bins
+      x: time_bin_start_s
+      y: throughput_mbps
+      group_by: flow_label
+    display:
+      title: Sample throughput
+      x_label: Time (s)
+      y_label: Throughput (Mbps)
+      legend: false
+      size: [7.0, 4.2]
+
+  - name: sample_rtt_cdf
+    type: cdf
+    data:
+      source: flow_intervals
+      value: rtt_ms
+      group_by: flow_label
+    display:
+      title: Sample RTT CDF
+      x_label: RTT (ms)
+      legend: false
+      color: "#2D72B7"
+      size: [7.0, 4.2]

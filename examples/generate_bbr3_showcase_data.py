@@ -2,18 +2,19 @@
 """Generate a small synthetic iperf3 JSON corpus for the docs.
 
 The data is intentionally synthetic. It is shaped like common BBRv3 paper
-experiments so the manifest/spec examples can be rendered by iperf3_plotter
+experiments so the experiment.yaml examples can be rendered by iperf3_plotter
 without requiring a network lab or vendoring another repository's datasets.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import math
 from pathlib import Path
 from typing import Iterable
+
+import yaml
 
 
 def main() -> None:
@@ -28,39 +29,29 @@ def main() -> None:
     rows: list[dict[str, object]] = []
     rows.extend(rtt_sweep(runs_dir))
     rows.extend(loss_sweep(runs_dir))
+    rows.extend(buffer_rtt_sweep(runs_dir))
     rows.extend(rtt_unfairness(runs_dir))
     rows.extend(staggered_starts(runs_dir))
     rows.extend(fct_runs(runs_dir))
     rows.extend(bdp_heatmap(runs_dir))
 
-    manifest = out_dir / "manifest.csv"
-    fieldnames = [
-        "file",
-        "flow_id",
-        "flow_label",
-        "scenario",
-        "cc_algo",
-        "cc_mix",
-        "aqm",
-        "trial",
-        "start_offset_s",
-        "rtt_ms",
-        "buffer_bdp",
-        "loss_percent",
-        "bottleneck_mbps",
-        "propagation_delay_ms",
-        "num_flows",
-        "num_cubic_flows",
-        "num_bbrv3_flows",
-        "transfer_size_mb",
-    ]
-    with manifest.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+    experiment = out_dir / "experiment.yaml"
+    experiment.write_text(
+        yaml.safe_dump(
+            {
+                "name": "bbr3_showcase",
+                "time_mode": "offset",
+                "default_plots": False,
+                "inputs": {"runs": rows},
+                "plots": showcase_plots(),
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
 
     print(f"Wrote {len(rows)} JSON files to {runs_dir}")
-    print(f"Wrote manifest to {manifest}")
+    print(f"Wrote experiment file to {experiment}")
 
 
 def rtt_sweep(runs_dir: Path) -> list[dict[str, object]]:
@@ -127,6 +118,50 @@ def loss_sweep(runs_dir: Path) -> list[dict[str, object]]:
                 bottleneck_mbps=1000,
             )
         )
+    return rows
+
+
+def buffer_rtt_sweep(runs_dir: Path) -> list[dict[str, object]]:
+    rows = []
+    for aqm in ["taildrop", "fq_codel"]:
+        for trial in [1, 2, 3]:
+            trial_factor = 0.96 + (trial * 0.02)
+            for rtt_ms in [20, 50, 100]:
+                for buffer_bdp in [0.25, 1, 4]:
+                    efficiency = 0.62 + (0.08 * math.log2(buffer_bdp + 1)) - (0.0012 * rtt_ms)
+                    if aqm == "fq_codel":
+                        efficiency += 0.05
+                    total_mbps = max(220, 1000 * efficiency) * trial_factor
+                    flows = [
+                        ("cubic", 0.34 if aqm == "fq_codel" else 0.43),
+                        ("bbrv3", 0.33 if aqm == "fq_codel" else 0.30),
+                        ("bbrv3", 0.33 if aqm == "fq_codel" else 0.27),
+                    ]
+                    for flow_index, (cc_algo, share) in enumerate(flows, start=1):
+                        throughput_mbps = total_mbps * share
+                        rows.append(
+                            add_run(
+                                runs_dir,
+                                f"buffer_rtt_{aqm}_rtt{rtt_ms}_bdp{slug(buffer_bdp)}_trial{trial}_flow{flow_index}_{cc_algo}.json",
+                                flow_id=f"{aqm}_rtt{rtt_ms}_bdp{slug(buffer_bdp)}_t{trial}_f{flow_index}",
+                                flow_label=f"{cc_algo.upper()} flow {flow_index}",
+                                scenario="buffer_rtt_sweep",
+                                cc_algo=cc_algo,
+                                cc_mix="cubic_vs_bbrv3",
+                                aqm=aqm,
+                                throughput_mbps=throughput_mbps,
+                                rtt_ms=rtt_ms,
+                                retransmits_total=int((rtt_ms * (1.8 if aqm == "taildrop" else 0.6)) / max(buffer_bdp, 0.25)),
+                                buffer_bdp=buffer_bdp,
+                                bottleneck_mbps=1000,
+                                propagation_delay_ms=rtt_ms,
+                                trial=trial,
+                                num_flows=3,
+                                num_cubic_flows=1,
+                                num_bbrv3_flows=2,
+                                parallel_streams=3,
+                            )
+                        )
     return rows
 
 
@@ -350,7 +385,7 @@ def add_run(
     cc_algo: str,
     throughput_mbps: float | None = None,
     throughput_profile: list[float] | None = None,
-    duration_s: float = 30,
+    duration_s: float = 12,
     rtt_ms: float = 20,
     retransmits_total: int = 0,
     start_offset_s: float = 0,
@@ -365,10 +400,11 @@ def add_run(
     num_cubic_flows: int = 0,
     num_bbrv3_flows: int = 0,
     transfer_size_mb: float | None = None,
+    parallel_streams: int = 3,
 ) -> dict[str, object]:
     path = runs_dir / filename
     profile = throughput_profile or [float(throughput_mbps or 100)] * max(1, math.ceil(duration_s))
-    write_iperf_json(path, profile, rtt_ms=rtt_ms, retransmits_total=retransmits_total)
+    write_iperf_json(path, profile, rtt_ms=rtt_ms, retransmits_total=retransmits_total, parallel_streams=parallel_streams)
     return {
         "file": f"runs/{filename}",
         "flow_id": flow_id,
@@ -391,72 +427,189 @@ def add_run(
     }
 
 
-def write_iperf_json(path: Path, throughput_profile_mbps: Iterable[float], *, rtt_ms: float, retransmits_total: int) -> None:
+def write_iperf_json(
+    path: Path,
+    throughput_profile_mbps: Iterable[float],
+    *,
+    rtt_ms: float,
+    retransmits_total: int,
+    parallel_streams: int,
+) -> None:
     profile = list(throughput_profile_mbps)
     intervals = []
-    total_bytes = 0
-    total_retransmits = 0
+    stream_totals = {stream_index: {"bytes": 0, "retransmits": 0} for stream_index in range(1, parallel_streams + 1)}
     for index, throughput_mbps in enumerate(profile):
         wave = 1 + (0.04 * math.sin(index / 3))
-        bps = throughput_mbps * wave * 1_000_000
-        bytes_sent = int(bps / 8)
-        interval_retransmits = int(round(retransmits_total / max(1, len(profile))))
-        total_bytes += bytes_sent
-        total_retransmits += interval_retransmits
-        stream = {
-            "socket": 1,
-            "start": index,
-            "end": index + 1,
-            "seconds": 1,
-            "bytes": bytes_sent,
-            "bits_per_second": bps,
-            "retransmits": interval_retransmits,
-            "snd_cwnd": int(throughput_mbps * 2400),
-            "rtt": int((rtt_ms + math.sin(index / 5)) * 1000),
-            "rttvar": int(max(1, rtt_ms * 0.08) * 1000),
-            "pmtu": 1500,
-            "omitted": False,
-        }
-        intervals.append({"streams": [stream], "sum": dict(stream)})
+        streams = []
+        for stream_index in range(1, parallel_streams + 1):
+            stream_mbps = throughput_mbps / parallel_streams
+            bps = stream_mbps * wave * 1_000_000
+            bytes_sent = int(bps / 8)
+            interval_retransmits = int(round(retransmits_total / max(1, len(profile) * parallel_streams)))
+            stream_totals[stream_index]["bytes"] += bytes_sent
+            stream_totals[stream_index]["retransmits"] += interval_retransmits
+            streams.append(
+                {
+                    "socket": stream_index,
+                    "start": index,
+                    "end": index + 1,
+                    "seconds": 1,
+                    "bytes": bytes_sent,
+                    "bits_per_second": bps,
+                    "retransmits": interval_retransmits,
+                    "snd_cwnd": int(stream_mbps * 2400),
+                    "rtt": int((rtt_ms + math.sin((index + stream_index) / 5)) * 1000),
+                    "rttvar": int(max(1, rtt_ms * 0.08) * 1000),
+                    "pmtu": 1500,
+                    "omitted": False,
+                }
+            )
+        intervals.append({"streams": streams, "sum": sum_streams(streams)})
 
     duration = len(profile)
-    avg_bps = (total_bytes * 8 / duration) if duration else 0
-    summary = {
-        "socket": 1,
-        "start": 0,
-        "end": duration,
-        "seconds": duration,
-        "bytes": total_bytes,
-        "bits_per_second": avg_bps,
-        "retransmits": total_retransmits,
-        "min_rtt": int((rtt_ms - 1) * 1000),
-        "mean_rtt": int(rtt_ms * 1000),
-        "max_rtt": int((rtt_ms + 1) * 1000),
-        "max_snd_cwnd": int(max(profile) * 2400),
-    }
+    end_streams = []
+    for stream_index, totals in stream_totals.items():
+        avg_bps = (totals["bytes"] * 8 / duration) if duration else 0
+        summary = {
+            "socket": stream_index,
+            "start": 0,
+            "end": duration,
+            "seconds": duration,
+            "bytes": totals["bytes"],
+            "bits_per_second": avg_bps,
+            "retransmits": totals["retransmits"],
+            "min_rtt": int((rtt_ms - 1) * 1000),
+            "mean_rtt": int(rtt_ms * 1000),
+            "max_rtt": int((rtt_ms + 1) * 1000),
+            "max_snd_cwnd": int((max(profile) / parallel_streams) * 2400),
+        }
+        end_streams.append({"sender": summary, "receiver": summary})
+
+    sum_summary = sum_streams([stream["sender"] for stream in end_streams])
+    sum_summary.update(
+        {
+            "socket": 0,
+            "start": 0,
+            "end": duration,
+            "seconds": duration,
+            "min_rtt": int((rtt_ms - 1) * 1000),
+            "mean_rtt": int(rtt_ms * 1000),
+            "max_rtt": int((rtt_ms + 1) * 1000),
+            "max_snd_cwnd": int(max(profile) * 2400),
+        }
+    )
+    connected = [
+        {
+            "socket": stream_index,
+            "local_host": "10.0.0.1",
+            "local_port": 5200 + stream_index,
+            "remote_host": "10.0.0.2",
+            "remote_port": 5201,
+        }
+        for stream_index in range(1, parallel_streams + 1)
+    ]
+
     data = {
         "start": {
             "timestamp": {"time": "Tue, 14 Nov 2023 22:13:20 GMT", "timesecs": 1700000000},
-            "test_start": {"protocol": "TCP", "num_streams": 1, "duration": duration, "reverse": 0},
-            "connected": [
-                {
-                    "socket": 1,
-                    "local_host": "10.0.0.1",
-                    "local_port": 5201,
-                    "remote_host": "10.0.0.2",
-                    "remote_port": 5201,
-                }
-            ],
+            "test_start": {"protocol": "TCP", "num_streams": parallel_streams, "duration": duration, "reverse": 0},
+            "connected": connected,
         },
         "intervals": intervals,
         "end": {
-            "streams": [{"sender": summary, "receiver": summary}],
-            "sum_sent": summary,
-            "sum_received": summary,
-            "sum": summary,
+            "streams": end_streams,
+            "sum_sent": sum_summary,
+            "sum_received": sum_summary,
+            "sum": sum_summary,
         },
     }
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def sum_streams(streams: list[dict[str, object]]) -> dict[str, object]:
+    seconds = float(streams[0].get("seconds", 1) or 1) if streams else 1
+    bytes_sent = sum(int(stream.get("bytes", 0) or 0) for stream in streams)
+    return {
+        "socket": 0,
+        "start": 0,
+        "end": seconds,
+        "seconds": seconds,
+        "bytes": bytes_sent,
+        "bits_per_second": (bytes_sent * 8) / seconds if seconds else 0,
+        "retransmits": sum(int(stream.get("retransmits", 0) or 0) for stream in streams),
+        "snd_cwnd": sum(int(stream.get("snd_cwnd", 0) or 0) for stream in streams),
+    }
+
+
+def showcase_plots() -> list[dict[str, object]]:
+    return [
+        {
+            "name": "throughput_vs_rtt",
+            "type": "line",
+            "data": {"source": "flow_summary", "filter": {"scenario": "rtt_sweep"}, "x": "rtt_ms", "y": "avg_throughput_mbps", "group_by": "cc_algo", "aggregate": "mean"},
+            "display": {"title": "Throughput as a function of RTT", "x_label": "Configured RTT (ms)", "y_label": "Average throughput (Mbps)", "colors": {"cubic": "#2D72B7", "bbrv3": "#95253B"}, "size": [7.2, 5.0], "marker": "o"},
+        },
+        {
+            "name": "retransmits_vs_rtt",
+            "type": "line",
+            "data": {"source": "flow_summary", "filter": {"scenario": "rtt_sweep"}, "x": "rtt_ms", "y": "retransmits", "group_by": "cc_algo", "aggregate": "mean"},
+            "display": {"title": "Retransmissions as a function of RTT", "x_label": "Configured RTT (ms)", "y_label": "Retransmissions (packets)", "colors": {"cubic": "#2D72B7", "bbrv3": "#95253B"}, "size": [7.2, 5.0], "marker": "o"},
+        },
+        {
+            "name": "throughput_vs_loss",
+            "type": "line",
+            "data": {"source": "flow_summary", "filter": {"scenario": "loss_sweep"}, "x": "loss_percent", "y": "avg_throughput_mbps", "group_by": "cc_algo", "aggregate": "mean"},
+            "display": {"title": "Throughput as a function of random loss", "x_label": "Random packet loss (%)", "y_label": "Average throughput (Mbps)", "colors": {"cubic": "#2D72B7", "bbrv3": "#95253B"}, "size": [7.2, 5.0], "marker": "o", "log_x": True},
+        },
+        {
+            "name": "retransmits_vs_loss",
+            "type": "line",
+            "data": {"source": "flow_summary", "filter": {"scenario": "loss_sweep"}, "x": "loss_percent", "y": "retransmits", "group_by": "cc_algo", "aggregate": "mean"},
+            "display": {"title": "Retransmissions as a function of random loss", "x_label": "Random packet loss (%)", "y_label": "Retransmissions (packets)", "colors": {"cubic": "#2D72B7", "bbrv3": "#95253B"}, "size": [7.2, 5.0], "marker": "o", "log_x": True, "log_y": True},
+        },
+        {
+            "name": "avg_flow_throughput_heatmap",
+            "type": "heatmap",
+            "data": {"source": "flow_summary", "filter": {"scenario": "buffer_rtt_sweep"}, "x": "rtt_ms", "y": "buffer_bdp", "value": "avg_throughput_mbps", "aggregate": "mean", "facet_by": "aqm"},
+            "display": {"title": "Average flow throughput over RTT and buffer size", "x_label": "Configured RTT (ms)", "y_label": "Buffer size (BDP)", "value_label": "Throughput (Mbps)", "cmap": "YlGnBu", "annotation_color": "black", "size": [7.5, 5.8]},
+        },
+        {
+            "name": "rtt_unfairness_throughput_vs_buffer",
+            "type": "line",
+            "data": {"source": "flow_summary", "filter": {"scenario": "rtt_unfairness"}, "x": "buffer_bdp", "y": "avg_throughput_mbps", "group_by": "rtt_ms", "facet_by": "aqm", "aggregate": "mean"},
+            "display": {"title": "Throughput by RTT class and buffer size", "x_label": "Buffer size (BDP)", "y_label": "Average throughput (Mbps)", "palette": "tab10", "size": [7.2, 5.0], "marker": "o", "log_x": True},
+        },
+        {
+            "name": "rtt_unfairness_fairness_vs_buffer",
+            "type": "line",
+            "data": {"source": "experiment_summary", "filter": {"scenario": "rtt_unfairness"}, "x": "buffer_bdp", "y": "jain_fairness", "group_by": "aqm", "aggregate": "mean"},
+            "display": {"title": "RTT fairness as a function of buffer size", "x_label": "Buffer size (BDP)", "y_label": "Jain fairness", "palette": "Set2", "size": [7.2, 5.0], "marker": "o", "log_x": True, "ylim": [0, 1.05]},
+        },
+        {
+            "name": "staggered_flow_throughput",
+            "type": "time_series",
+            "data": {"source": "flow_time_bins", "filter": {"scenario": "staggered_coexistence"}, "x": "time_bin_start_s", "y": "throughput_mbps", "group_by": "flow_label", "aggregate": "mean"},
+            "display": {"title": "Throughput with staggered flow starts", "x_label": "Experiment time (s)", "y_label": "Throughput (Mbps)", "palette": "tab10", "size": [9.0, 5.0]},
+        },
+        {
+            "name": "staggered_flow_fairness",
+            "type": "line",
+            "data": {"source": "flow_fairness", "filter": {"scenario": "staggered_coexistence"}, "x": "time_bin_start_s", "y": "jain_fairness", "aggregate": "mean"},
+            "display": {"title": "Fairness with staggered flow starts", "x_label": "Experiment time (s)", "y_label": "Jain fairness", "color": "#E5B245", "size": [9.0, 4.2], "ylim": [0, 1.05]},
+        },
+        {
+            "name": "fct_cdf_by_cc",
+            "type": "cdf",
+            "data": {"source": "flow_summary", "filter": {"scenario": "fct"}, "value": "duration_s", "group_by": "cc_algo"},
+            "display": {"title": "Flow completion time CDF", "x_label": "Flow completion time (s)", "colors": {"cubic": "#2D72B7", "bbrv3": "#95253B"}, "size": [7.2, 5.0]},
+        },
+        {
+            "name": "fairness_heatmap_bandwidth_delay",
+            "type": "heatmap",
+            "data": {"source": "experiment_summary", "filter": {"scenario": "bdp_sweep"}, "x": "propagation_delay_ms", "y": "bottleneck_mbps", "value": "jain_fairness", "annotations": ["link_utilization_percent", "share_cubic_percent", "share_bbrv3_percent"]},
+            "display": {"title": "Fairness over bandwidth-delay conditions", "x_label": "Configured RTT or propagation delay (ms)", "y_label": "Bottleneck bandwidth (Mbps)", "value_label": "Jain fairness", "cmap": "YlGnBu", "annotation_color": "black", "annotation_fontsize": 7, "size": [8.5, 6.4]},
+        },
+    ]
 
 
 def slug(value: float) -> str:

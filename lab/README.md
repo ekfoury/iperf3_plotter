@@ -36,7 +36,8 @@ lab/run_docker_lab.sh --clients 2 --duration 20 --stagger 5 --bw 100 --delay 20m
 Docker Desktop's Linux kernel may not expose every TCP congestion-control
 algorithm. If a requested algorithm is unavailable, the lab falls back to
 `cubic` or `reno` and records both `requested_cc_algo` and `cc_algo` in the
-manifest. Use `--strict-cc` if you want unsupported algorithms to fail instead.
+experiment file. Use `--strict-cc` if you want unsupported algorithms to fail
+instead.
 
 By default the topology uses a Linux bridge switch inside Mininet because it is
 more reliable than Open vSwitch inside Docker Desktop. To test with OVS anyway,
@@ -46,7 +47,7 @@ The lab creates:
 
 - `lab-results/raw/*.json`: one iperf3 JSON file per client
 - `lab-results/raw/*.stderr`: iperf3 stderr logs
-- `lab-results/experiment.json`: manifest with `start_offset_s` and metadata
+- `lab-results/experiment.json`: experiment file with `start_offset_s`, metadata, and inputs
 - `lab-results/analysis/report.html`: plots and summary report
 
 The analysis uses `--time-mode offset`, so if client 1 starts at 0 seconds and

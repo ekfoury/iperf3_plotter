@@ -153,62 +153,6 @@ plots:
             self.assertEqual(len(experiment), 1)
             self.assertEqual(experiment.iloc[0]["flows"], 2)
 
-    def test_bbr3_showcase_spec_renders_from_manifest_style_metadata(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            rows = [
-                ("rtt_cubic_2", {"scenario": "rtt_sweep", "cc_algo": "cubic", "rtt_ms": 2, "propagation_delay_ms": 2}),
-                ("rtt_bbrv3_2", {"scenario": "rtt_sweep", "cc_algo": "bbrv3", "rtt_ms": 2, "propagation_delay_ms": 2}),
-                ("rtt_cubic_20", {"scenario": "rtt_sweep", "cc_algo": "cubic", "rtt_ms": 20, "propagation_delay_ms": 20}),
-                ("rtt_bbrv3_20", {"scenario": "rtt_sweep", "cc_algo": "bbrv3", "rtt_ms": 20, "propagation_delay_ms": 20}),
-                ("loss_bbrv3_001", {"scenario": "loss_sweep", "cc_algo": "bbrv3", "loss_percent": 0.01}),
-                ("loss_bbrv3_1", {"scenario": "loss_sweep", "cc_algo": "bbrv3", "loss_percent": 1}),
-                ("unfair_20_taildrop", {"scenario": "rtt_unfairness", "cc_algo": "bbrv3", "rtt_ms": 20, "aqm": "taildrop"}),
-                ("unfair_100_taildrop", {"scenario": "rtt_unfairness", "cc_algo": "bbrv3", "rtt_ms": 100, "aqm": "taildrop"}),
-                ("unfair_20_fq", {"scenario": "rtt_unfairness", "cc_algo": "bbrv3", "rtt_ms": 20, "aqm": "fq_codel"}),
-                ("unfair_100_fq", {"scenario": "rtt_unfairness", "cc_algo": "bbrv3", "rtt_ms": 100, "aqm": "fq_codel"}),
-                ("stagger_cubic", {"scenario": "staggered_coexistence", "cc_algo": "cubic", "flow_label": "CUBIC", "start_offset_s": 0}),
-                ("stagger_bbrv3", {"scenario": "staggered_coexistence", "cc_algo": "bbrv3", "flow_label": "BBRv3", "start_offset_s": 5}),
-                ("fct_cubic", {"scenario": "fct", "cc_algo": "cubic"}),
-                ("fct_bbrv3", {"scenario": "fct", "cc_algo": "bbrv3"}),
-                ("bdp_cubic_100_20", {"scenario": "bdp_sweep", "cc_algo": "cubic", "propagation_delay_ms": 20, "bottleneck_mbps": 100}),
-                ("bdp_bbrv3_100_20", {"scenario": "bdp_sweep", "cc_algo": "bbrv3", "propagation_delay_ms": 20, "bottleneck_mbps": 100}),
-                ("bdp_cubic_1000_80", {"scenario": "bdp_sweep", "cc_algo": "cubic", "propagation_delay_ms": 80, "bottleneck_mbps": 1000}),
-                ("bdp_bbrv3_1000_80", {"scenario": "bdp_sweep", "cc_algo": "bbrv3", "propagation_delay_ms": 80, "bottleneck_mbps": 1000}),
-            ]
-            paths = []
-            metadata = {}
-            for index, (name, row_metadata) in enumerate(rows, start=1):
-                path = temp_path / f"{name}.json"
-                shutil.copyfile(SAMPLE, path)
-                paths.append(path)
-                metadata[path.name] = {
-                    "flow_id": name,
-                    "trial": 1,
-                    "buffer_bdp": row_metadata.get("buffer_bdp", 1),
-                    "loss_percent": row_metadata.get("loss_percent", 0),
-                    "bottleneck_mbps": row_metadata.get("bottleneck_mbps", 1000),
-                    "propagation_delay_ms": row_metadata.get("propagation_delay_ms", 20),
-                    **row_metadata,
-                }
-
-            intervals, summaries, runs = parse_files(paths, metadata)
-            artifacts = generate_custom_plots(
-                intervals,
-                summaries,
-                runs,
-                temp_path / "plots",
-                spec_path=ROOT / "examples" / "bbr3_showcase_plots.yaml",
-                formats=["png"],
-                time_mode="offset",
-            )
-            names = {artifact.name for artifact in artifacts}
-
-            self.assertIn("throughput_vs_rtt", names)
-            self.assertIn("staggered_flow_fairness", names)
-            self.assertIn("fct_cdf_by_cc", names)
-            self.assertIn("fairness_heatmap_bandwidth_delay", names)
-
 
 if __name__ == "__main__":
     unittest.main()

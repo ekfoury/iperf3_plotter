@@ -28,13 +28,11 @@ if [ "${#JSON_FILES[@]}" -eq 0 ]; then
   exit 1
 fi
 
-PYTHONPATH="${REPO_ROOT}/src" python3 -m iperf3_plotter all \
-  "${JSON_FILES[@]}" \
-  --manifest "${REPO_ROOT}/${OUT_DIR}/experiment.json" \
-  --time-mode offset \
+PYTHONPATH="${REPO_ROOT}/src" python3 -m iperf3_plotter experiment \
+  "${REPO_ROOT}/${OUT_DIR}/experiment.json" \
   --out "${REPO_ROOT}/${OUT_DIR}/analysis"
 
 echo "Lab complete:"
 echo "  raw JSON: ${REPO_ROOT}/${OUT_DIR}/raw"
-echo "  manifest: ${REPO_ROOT}/${OUT_DIR}/experiment.json"
+echo "  experiment: ${REPO_ROOT}/${OUT_DIR}/experiment.json"
 echo "  report: ${REPO_ROOT}/${OUT_DIR}/analysis/report.html"
