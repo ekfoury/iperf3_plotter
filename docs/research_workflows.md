@@ -207,16 +207,35 @@ write the friendlier `rtt_ms` in the experiment file. Measured RTT samples are
 still available as `rtt_ms` in interval-level sources and as `mean_rtt_ms` /
 `p95_rtt_ms` in summaries.
 
-## Throughput And Retransmissions Vs RTT
+## Ten JSON Files: Throughput Vs RTT
 
 Use this for paper-style figures where the x-axis is configured RTT and the
 series are congestion-control algorithms.
+
+This complete example uses 10 iperf3 JSON files: five configured RTT values
+times two congestion-control algorithms.
 
 ```yaml
 name: rtt_sweep
 
 inputs:
   runs:
+    - file: runs/rtt_sweep_cubic_rtt2.json
+      flow_id: cubic_rtt2
+      flow_label: CUBIC 2 ms
+      scenario: rtt_sweep
+      cc_algo: cubic
+      rtt_ms: 2
+      loss_percent: 0.025
+      bottleneck_mbps: 1000
+    - file: runs/rtt_sweep_bbrv3_rtt2.json
+      flow_id: bbrv3_rtt2
+      flow_label: BBRv3 2 ms
+      scenario: rtt_sweep
+      cc_algo: bbrv3
+      rtt_ms: 2
+      loss_percent: 0.025
+      bottleneck_mbps: 1000
     - file: runs/rtt_sweep_cubic_rtt20.json
       flow_id: cubic_rtt20
       flow_label: CUBIC 20 ms
@@ -231,6 +250,54 @@ inputs:
       scenario: rtt_sweep
       cc_algo: bbrv3
       rtt_ms: 20
+      loss_percent: 0.025
+      bottleneck_mbps: 1000
+    - file: runs/rtt_sweep_cubic_rtt40.json
+      flow_id: cubic_rtt40
+      flow_label: CUBIC 40 ms
+      scenario: rtt_sweep
+      cc_algo: cubic
+      rtt_ms: 40
+      loss_percent: 0.025
+      bottleneck_mbps: 1000
+    - file: runs/rtt_sweep_bbrv3_rtt40.json
+      flow_id: bbrv3_rtt40
+      flow_label: BBRv3 40 ms
+      scenario: rtt_sweep
+      cc_algo: bbrv3
+      rtt_ms: 40
+      loss_percent: 0.025
+      bottleneck_mbps: 1000
+    - file: runs/rtt_sweep_cubic_rtt80.json
+      flow_id: cubic_rtt80
+      flow_label: CUBIC 80 ms
+      scenario: rtt_sweep
+      cc_algo: cubic
+      rtt_ms: 80
+      loss_percent: 0.025
+      bottleneck_mbps: 1000
+    - file: runs/rtt_sweep_bbrv3_rtt80.json
+      flow_id: bbrv3_rtt80
+      flow_label: BBRv3 80 ms
+      scenario: rtt_sweep
+      cc_algo: bbrv3
+      rtt_ms: 80
+      loss_percent: 0.025
+      bottleneck_mbps: 1000
+    - file: runs/rtt_sweep_cubic_rtt100.json
+      flow_id: cubic_rtt100
+      flow_label: CUBIC 100 ms
+      scenario: rtt_sweep
+      cc_algo: cubic
+      rtt_ms: 100
+      loss_percent: 0.025
+      bottleneck_mbps: 1000
+    - file: runs/rtt_sweep_bbrv3_rtt100.json
+      flow_id: bbrv3_rtt100
+      flow_label: BBRv3 100 ms
+      scenario: rtt_sweep
+      cc_algo: bbrv3
+      rtt_ms: 100
       loss_percent: 0.025
       bottleneck_mbps: 1000
 
@@ -249,26 +316,22 @@ plots:
       y_label: Average throughput (Mbps)
       marker: o
       colors: {cubic: "#2D72B7", bbrv3: "#95253B"}
-
-  - name: retransmits_vs_rtt
-    type: line
-    data:
-      source: flow_summary
-      filter: {scenario: rtt_sweep}
-      x: rtt_ms
-      y: retransmits
-      group_by: cc_algo
-      aggregate: mean
-    display:
-      x_label: Configured RTT (ms)
-      y_label: Retransmissions (packets)
-      marker: o
-      colors: {cubic: "#2D72B7", bbrv3: "#95253B"}
 ```
 
-| Throughput vs RTT | Retransmissions vs RTT |
-| --- | --- |
-| ![Throughput as a function of RTT](images/bbr3_showcase/throughput_vs_rtt.png) | ![Retransmissions as a function of RTT](images/bbr3_showcase/retransmits_vs_rtt.png) |
+Run it:
+
+```bash
+iperfplot validate rtt_sweep_10_files.yaml
+iperfplot experiment rtt_sweep_10_files.yaml --out results/rtt-sweep --format png
+```
+
+The plot reads `flow_summary`, so if any JSON file was generated with
+`iperf3 -P`, its parallel streams are aggregated into one throughput value for
+that transfer before the line is drawn.
+
+| Throughput vs RTT |
+| --- |
+| ![Throughput as a function of RTT](images/bbr3_showcase/throughput_vs_rtt.png) |
 
 ## Throughput And Retransmissions Vs Loss
 
