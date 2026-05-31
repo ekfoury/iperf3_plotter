@@ -173,7 +173,7 @@ selected source.
 Supported plot sources:
 
 | Source | CSV | Use For |
-| --- | --- |
+| --- | --- | --- |
 | `intervals` | `intervals.csv` | one row per stream per original iperf interval |
 | `flow_intervals` | `flow_intervals.csv` | one row per transfer per original interval, with parallel streams aggregated |
 | `stream_time_bins` | `stream_time_bins.csv` | per-stream samples aligned onto common time bins |
