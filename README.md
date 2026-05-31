@@ -180,6 +180,26 @@ infer:
 Placeholder names become metadata columns. For example,
 `rtt_sweep_bbrv3_rtt80.json` sets `cc_algo: bbrv3` and `rtt_ms: 80`.
 
+In a plot, `data.source` selects one derived table, and fields such as `x`,
+`y`, `value`, `group_by`, `facet_by`, and `filter` refer to columns in that
+table. After a run, inspect `results/data/*.csv` to see the exact columns.
+Common sources are:
+
+| Source | Use For |
+| --- | --- |
+| `flow_time_bins` | transfer-level time series with parallel streams aggregated |
+| `stream_time_bins` | per-stream time series for `iperf3 -P` diagnostics |
+| `flow_summary` | one row per transfer for RTT/loss/buffer sweeps |
+| `stream_summary` | one row per parallel stream |
+| `flow_fairness` / `stream_fairness` | Jain fairness over time |
+| `flow_share` / `stream_share` | bandwidth share over time |
+| `experiment_summary` | one row per experiment condition for heatmaps and sweep summaries |
+
+`group_by` can be any column in the selected source. Typical choices are
+`flow_label`, `flow_id`, `stream_id`, `cc_algo`, `rtt_ms`, `buffer_bdp`, `aqm`,
+`trial`, or any metadata field you put in `inputs.runs`, `defaults`, or
+`filename_pattern`.
+
 ## Output Files
 
 `iperfplot all` and `iperfplot experiment` create:
@@ -197,6 +217,8 @@ Important CSV files:
 - `flow_intervals.csv`: one row per transfer per interval, with parallel streams aggregated
 - `stream_time_bins.csv`: streams resampled onto common time bins
 - `flow_time_bins.csv`: transfers resampled onto common time bins
+- `total_time_bins.csv`: all active transfers aggregated onto common time bins
+- `total_intervals.csv`: all active transfers aggregated at original interval starts
 - `stream_summary.csv`: throughput, RTT, and retransmit summary per stream
 - `flow_summary.csv`: throughput, RTT, and retransmit summary per transfer
 - `experiment_summary.csv`: one row per experiment condition for sweep plots

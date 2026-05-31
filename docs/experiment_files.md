@@ -152,25 +152,65 @@ inputs:
       rtt_ms: 100
 ```
 
-## Parallel Streams And Flows
+## Plot Sources And Grouping Fields
 
-One `inputs.runs` entry should normally represent one iperf3 client transfer,
-even if the client used `iperf3 -P 4`.
+In every plot, `data.source` selects the table to plot. The other data fields
+then refer to columns in that table:
 
-The tool keeps both views:
+- `x`, `y`, and `value` choose the plotted metric columns.
+- `filter` keeps only rows whose columns match the requested values.
+- `group_by` splits one plot into one line, bar, CDF, box, or histogram per
+  column value.
+- `facet_by` creates separate plot files per column value.
+- `annotations` adds extra heatmap text from one or more columns.
 
-| Source | Meaning |
+After running an experiment, open the matching CSV under `results/data/` to see
+the exact available columns. For example, if a plot uses
+`source: flow_time_bins`, inspect `results/data/flow_time_bins.csv`. If
+`validate` reports `missing column(s)`, the field is not present in the
+selected source.
+
+Supported plot sources:
+
+| Source | CSV | Use For |
 | --- | --- |
-| `intervals` | one row per stream per iperf interval |
-| `flow_intervals` | parallel streams aggregated into one row per transfer interval |
-| `stream_summary` | one row per stream |
-| `flow_summary` | one row per transfer |
-| `flow_time_bins` | transfers aligned to common time bins |
-| `flow_fairness` | Jain fairness over time among active transfers |
-| `experiment_summary` | one row per experiment condition, with fairness/utilization/share metrics |
+| `intervals` | `intervals.csv` | one row per stream per original iperf interval |
+| `flow_intervals` | `flow_intervals.csv` | one row per transfer per original interval, with parallel streams aggregated |
+| `stream_time_bins` | `stream_time_bins.csv` | per-stream samples aligned onto common time bins |
+| `flow_time_bins` | `flow_time_bins.csv` | per-transfer samples aligned onto common time bins |
+| `total_time_bins` | `total_time_bins.csv` | total throughput across all active transfers per common time bin |
+| `total_intervals` | `total_intervals.csv` | total throughput across all active transfers at original interval starts |
+| `summaries` | `summaries.csv` | raw iperf3 end summaries, including sender/receiver and aggregate rows |
+| `runs` | `runs.csv` | one row per JSON input file with run metadata |
+| `stream_summary` | `stream_summary.csv` | one row per parallel stream |
+| `flow_summary` | `flow_summary.csv` | one row per transfer, with parallel streams aggregated |
+| `stream_fairness` | `stream_fairness.csv` | Jain fairness over time among active streams |
+| `flow_fairness` | `flow_fairness.csv` | Jain fairness over time among active transfers |
+| `stream_share` | `stream_share.csv` | bandwidth share over time for each stream |
+| `flow_share` | `flow_share.csv` | bandwidth share over time for each transfer |
+| `experiment_summary` | `experiment_summary.csv` | one row per experiment condition, with total throughput, fairness, utilization, and per-CCA share columns |
 
 Use `stream_*` sources when you want to inspect individual parallel streams.
 Use `flow_*` sources for the transfer-level plots that papers usually show.
+Use `total_*` sources when the figure should show the aggregate load on the
+link instead of individual transfers.
+
+`group_by` can be any column in the selected source. The most common choices
+are:
+
+| Grouping Field | Meaning |
+| --- | --- |
+| `flow_label` | readable transfer label from `inputs.runs` |
+| `flow_id` | unique transfer id; defaults to the filename stem |
+| `stream_id` or `stream_index` | individual parallel streams from `iperf3 -P` |
+| `cc_algo` | congestion-control algorithm or implementation label |
+| `scenario` | experiment scenario, useful when one YAML contains multiple studies |
+| `rtt_ms` | configured RTT in `flow_summary`, `stream_summary`, and `runs`; measured RTT in interval/time-bin sources |
+| `buffer_bdp`, `bottleneck_mbps`, `loss_percent`, `aqm`, `trial`, `host` | experiment metadata supplied by you |
+
+Custom metadata from `inputs.runs`, `defaults`, or `infer.filename_pattern`
+becomes columns that can be used in `filter`, `group_by`, `facet_by`, `x`, `y`,
+or `value` when that metadata is present in the selected source.
 
 ## Reusable Plot Fields
 
@@ -208,11 +248,11 @@ one scenario, omit it.
 aqm` creates one Tail Drop plot and one FQ-CoDel plot from the same plot
 definition.
 
-`rtt_ms` in experiment metadata is the configured RTT. In summary-level plot
-sources, the tool maps it to the internal column `rtt_config_ms`, so users can
-write the friendlier `rtt_ms` in the experiment file. Measured RTT samples are
-still available as `rtt_ms` in interval-level sources and as `mean_rtt_ms` /
-`p95_rtt_ms` in summaries.
+`rtt_ms` in experiment metadata is the configured RTT. In `flow_summary`,
+`stream_summary`, and `runs`, the tool maps it to the internal column
+`rtt_config_ms`, so users can write the friendlier `rtt_ms` in the experiment
+file. Measured RTT samples are still available as `rtt_ms` in interval and
+time-bin sources, and as `mean_rtt_ms` / `p95_rtt_ms` in summaries.
 
 ## Ten JSON Files With Filename Pattern: Throughput Vs RTT
 
@@ -597,8 +637,9 @@ true queue-occupancy plots need another data source.
 
 `missing column(s)`:
 
-The plot references a column that is not in the selected `source`. Inspect
-`results/data/flow_summary.csv` and `results/data/experiment_summary.csv`.
+The plot references a column that is not in the selected `source`. Inspect the
+matching file under `results/data/`, such as `flow_summary.csv` for
+`source: flow_summary`.
 
 All flows start at X=0:
 

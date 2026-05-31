@@ -17,6 +17,8 @@ from .metrics import (
     interval_summary,
     resample_time_bins,
     series_similarity,
+    total_aggregate,
+    total_from_bins,
 )
 
 
@@ -54,6 +56,14 @@ def write_tables(
     flow_bins = resample_time_bins(flow_df, entity_col="flow_id", time_mode=time_mode) if not flow_df.empty else pd.DataFrame()
     files["flow_time_bins"] = out_dir / "flow_time_bins.csv"
     flow_bins.to_csv(files["flow_time_bins"], index=False)
+
+    total_bins = total_from_bins(flow_bins) if not flow_bins.empty else pd.DataFrame()
+    files["total_time_bins"] = out_dir / "total_time_bins.csv"
+    total_bins.to_csv(files["total_time_bins"], index=False)
+
+    total_intervals = total_aggregate(flow_df, "start_s") if not flow_df.empty else pd.DataFrame()
+    files["total_intervals"] = out_dir / "total_intervals.csv"
+    total_intervals.to_csv(files["total_intervals"], index=False)
 
     stream_summary = interval_summary(intervals, "stream_id")
     files["stream_summary"] = out_dir / "stream_summary.csv"
