@@ -162,8 +162,22 @@ PYTHONPATH=src python3 -m iperf3_plotter experiment examples/experiment.yaml --o
 ```
 
 No naming convention is required when you list files under `inputs.runs`. For
-large sweeps, you can optionally use `inputs.files` plus `infer.filename_pattern`
-to extract metadata from filenames.
+large sweeps, you can optionally use `inputs.files` plus
+`infer.filename_regex` to extract metadata from filenames:
+
+```yaml
+inputs:
+  files: runs/rtt_sweep_*.json
+
+defaults:
+  scenario: rtt_sweep
+
+infer:
+  filename_regex: '^rtt_sweep_(?P<cc_algo>cubic|bbrv3)_rtt(?P<rtt_ms>\d+)\.json$'
+```
+
+Named capture groups become metadata columns. For example,
+`rtt_sweep_bbrv3_rtt80.json` sets `cc_algo: bbrv3` and `rtt_ms: 80`.
 
 ## Output Files
 

@@ -215,16 +215,28 @@ def _resolve_explicit_runs(runs: Any, base_dir: Path) -> tuple[list[Path], dict[
 def _infer_metadata(config: dict[str, Any], base_dir: Path, files: list[Path]) -> dict[str, dict[str, Any]]:
     infer = config.get("infer", config.get("derive", {}))
     infer = _object(infer, "infer")
-    pattern = infer.get("filename_pattern") or infer.get("path_pattern")
-    if not pattern:
+    regex_source = _regex_source(infer)
+    pattern_source = _pattern_source(infer)
+    if regex_source and pattern_source:
+        raise ExperimentError("Use only one infer filename/path rule: filename_regex, path_regex, filename_pattern, or path_pattern")
+    if not regex_source and not pattern_source:
         return {}
 
-    regex = _filename_pattern_to_regex(str(pattern))
-    match_name_only = "/" not in str(pattern) and "\\" not in str(pattern)
+    if regex_source:
+        key, value = regex_source
+        regex = _compile_metadata_regex(str(value))
+        match_name_only = key == "filename_regex"
+        use_search = True
+    else:
+        key, value = pattern_source or ("filename_pattern", "")
+        regex = _filename_pattern_to_regex(str(value))
+        match_name_only = key == "filename_pattern"
+        use_search = False
+
     metadata: dict[str, dict[str, Any]] = {}
     for file in files:
         target = file.name if match_name_only else _relative_or_name(base_dir, file)
-        match = regex.match(target)
+        match = regex.search(target) if use_search else regex.match(target)
         if not match:
             continue
         metadata[str(file)] = {key: _coerce(value) for key, value in match.groupdict().items()}
@@ -456,6 +468,30 @@ def _filename_pattern_to_regex(pattern: str) -> re.Pattern[str]:
     if not fields:
         raise ExperimentError("infer.filename_pattern must contain at least one {field}")
     return re.compile("^" + "".join(parts) + "$")
+
+
+def _compile_metadata_regex(pattern: str) -> re.Pattern[str]:
+    try:
+        regex = re.compile(pattern)
+    except re.error as exc:
+        raise ExperimentError(f"infer filename/path regex is invalid: {exc}") from exc
+    if not regex.groupindex:
+        raise ExperimentError("infer filename/path regex must include named groups such as (?P<rtt_ms>\\d+)")
+    return regex
+
+
+def _regex_source(infer: dict[str, Any]) -> tuple[str, Any] | None:
+    for key in ("filename_regex", "path_regex"):
+        if infer.get(key):
+            return key, infer[key]
+    return None
+
+
+def _pattern_source(infer: dict[str, Any]) -> tuple[str, Any] | None:
+    for key in ("filename_pattern", "path_pattern"):
+        if infer.get(key):
+            return key, infer[key]
+    return None
 
 
 def _resolve_path(base_dir: Path, value: Any) -> Path:

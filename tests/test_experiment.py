@@ -67,6 +67,48 @@ plots:
         warnings = validate_experiment(ROOT / "examples" / "experiment.yaml")
         self.assertEqual(warnings, [])
 
+    def test_experiment_file_infers_metadata_from_filename_regex(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            runs_dir = temp_path / "runs"
+            runs_dir.mkdir()
+            shutil.copyfile(SAMPLE, runs_dir / "rtt_sweep_cubic_rtt20.json")
+            shutil.copyfile(SAMPLE, runs_dir / "rtt_sweep_bbrv3_rtt100.json")
+
+            config = temp_path / "experiment.yaml"
+            config.write_text(
+                r"""
+name: regex_rtt_sweep
+default_plots: false
+defaults:
+  scenario: rtt_sweep
+  bottleneck_mbps: 1000
+inputs:
+  files: runs/rtt_sweep_*.json
+infer:
+  filename_regex: '^rtt_sweep_(?P<cc_algo>cubic|bbrv3)_rtt(?P<rtt_ms>\d+)\.json$'
+plots:
+  - name: throughput_vs_rtt
+    type: line
+    data:
+      source: flow_summary
+      filter: {scenario: rtt_sweep}
+      x: rtt_ms
+      y: avg_throughput_mbps
+      group_by: cc_algo
+      aggregate: mean
+""",
+                encoding="utf-8",
+            )
+
+            plan = resolve_experiment(config)
+            self.assertEqual(len(plan.files), 2)
+            metadata = plan.metadata["rtt_sweep_bbrv3_rtt100.json"]
+            self.assertEqual(metadata["cc_algo"], "bbrv3")
+            self.assertEqual(metadata["rtt_ms"], 100)
+            self.assertEqual(plan.plot_specs[0]["x"], "rtt_config_ms")
+            self.assertEqual(validate_experiment(config), [])
+
 
 if __name__ == "__main__":
     unittest.main()

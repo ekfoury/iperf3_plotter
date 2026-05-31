@@ -104,7 +104,8 @@ inputs:
 This requires no filename convention. It is best when your files already exist
 with inconsistent names.
 
-For large sweeps, use a filename convention as a shortcut:
+For large sweeps, use a filename convention as a shortcut. The easier form is
+`filename_pattern`, where `{field}` placeholders become metadata columns:
 
 ```yaml
 inputs:
@@ -134,6 +135,16 @@ trial: 2
 flow_id: 3
 cc_algo: bbrv3
 ```
+
+Use `filename_regex` when you need full regular-expression control:
+
+```yaml
+infer:
+  filename_regex: '^(?P<aqm>taildrop|fq_codel)_rtt(?P<rtt_ms>\d+)_bdp(?P<buffer_bdp>[0-9.]+)_trial(?P<trial>\d+)_flow(?P<flow_id>\d+)_(?P<cc_algo>cubic|bbrv3)\.json$'
+```
+
+The regex must use named capture groups like `(?P<rtt_ms>\d+)`. Those group
+names become metadata fields.
 
 Use `overrides` for exceptions:
 
@@ -207,99 +218,44 @@ write the friendlier `rtt_ms` in the experiment file. Measured RTT samples are
 still available as `rtt_ms` in interval-level sources and as `mean_rtt_ms` /
 `p95_rtt_ms` in summaries.
 
-## Ten JSON Files: Throughput Vs RTT
+## Ten JSON Files With Regex: Throughput Vs RTT
 
 Use this for paper-style figures where the x-axis is configured RTT and the
 series are congestion-control algorithms.
 
 This complete example uses 10 iperf3 JSON files: five configured RTT values
-times two congestion-control algorithms.
+times two congestion-control algorithms. The user does not list the 10 files
+one by one. `inputs.files` finds them with a glob, and `infer.filename_regex`
+extracts metadata from each filename.
+
+Expected files:
+
+```text
+runs/rtt_sweep_cubic_rtt2.json
+runs/rtt_sweep_bbrv3_rtt2.json
+runs/rtt_sweep_cubic_rtt20.json
+runs/rtt_sweep_bbrv3_rtt20.json
+runs/rtt_sweep_cubic_rtt40.json
+runs/rtt_sweep_bbrv3_rtt40.json
+runs/rtt_sweep_cubic_rtt80.json
+runs/rtt_sweep_bbrv3_rtt80.json
+runs/rtt_sweep_cubic_rtt100.json
+runs/rtt_sweep_bbrv3_rtt100.json
+```
 
 ```yaml
 name: rtt_sweep
 
+defaults:
+  scenario: rtt_sweep
+  loss_percent: 0.025
+  bottleneck_mbps: 1000
+
 inputs:
-  runs:
-    - file: runs/rtt_sweep_cubic_rtt2.json
-      flow_id: cubic_rtt2
-      flow_label: CUBIC 2 ms
-      scenario: rtt_sweep
-      cc_algo: cubic
-      rtt_ms: 2
-      loss_percent: 0.025
-      bottleneck_mbps: 1000
-    - file: runs/rtt_sweep_bbrv3_rtt2.json
-      flow_id: bbrv3_rtt2
-      flow_label: BBRv3 2 ms
-      scenario: rtt_sweep
-      cc_algo: bbrv3
-      rtt_ms: 2
-      loss_percent: 0.025
-      bottleneck_mbps: 1000
-    - file: runs/rtt_sweep_cubic_rtt20.json
-      flow_id: cubic_rtt20
-      flow_label: CUBIC 20 ms
-      scenario: rtt_sweep
-      cc_algo: cubic
-      rtt_ms: 20
-      loss_percent: 0.025
-      bottleneck_mbps: 1000
-    - file: runs/rtt_sweep_bbrv3_rtt20.json
-      flow_id: bbrv3_rtt20
-      flow_label: BBRv3 20 ms
-      scenario: rtt_sweep
-      cc_algo: bbrv3
-      rtt_ms: 20
-      loss_percent: 0.025
-      bottleneck_mbps: 1000
-    - file: runs/rtt_sweep_cubic_rtt40.json
-      flow_id: cubic_rtt40
-      flow_label: CUBIC 40 ms
-      scenario: rtt_sweep
-      cc_algo: cubic
-      rtt_ms: 40
-      loss_percent: 0.025
-      bottleneck_mbps: 1000
-    - file: runs/rtt_sweep_bbrv3_rtt40.json
-      flow_id: bbrv3_rtt40
-      flow_label: BBRv3 40 ms
-      scenario: rtt_sweep
-      cc_algo: bbrv3
-      rtt_ms: 40
-      loss_percent: 0.025
-      bottleneck_mbps: 1000
-    - file: runs/rtt_sweep_cubic_rtt80.json
-      flow_id: cubic_rtt80
-      flow_label: CUBIC 80 ms
-      scenario: rtt_sweep
-      cc_algo: cubic
-      rtt_ms: 80
-      loss_percent: 0.025
-      bottleneck_mbps: 1000
-    - file: runs/rtt_sweep_bbrv3_rtt80.json
-      flow_id: bbrv3_rtt80
-      flow_label: BBRv3 80 ms
-      scenario: rtt_sweep
-      cc_algo: bbrv3
-      rtt_ms: 80
-      loss_percent: 0.025
-      bottleneck_mbps: 1000
-    - file: runs/rtt_sweep_cubic_rtt100.json
-      flow_id: cubic_rtt100
-      flow_label: CUBIC 100 ms
-      scenario: rtt_sweep
-      cc_algo: cubic
-      rtt_ms: 100
-      loss_percent: 0.025
-      bottleneck_mbps: 1000
-    - file: runs/rtt_sweep_bbrv3_rtt100.json
-      flow_id: bbrv3_rtt100
-      flow_label: BBRv3 100 ms
-      scenario: rtt_sweep
-      cc_algo: bbrv3
-      rtt_ms: 100
-      loss_percent: 0.025
-      bottleneck_mbps: 1000
+  files: runs/rtt_sweep_*.json
+
+infer:
+  filename_regex: '^rtt_sweep_(?P<cc_algo>cubic|bbrv3)_rtt(?P<rtt_ms>\d+)\.json$'
 
 plots:
   - name: throughput_vs_rtt
@@ -324,6 +280,19 @@ Run it:
 iperfplot validate rtt_sweep_10_files.yaml
 iperfplot experiment rtt_sweep_10_files.yaml --out results/rtt-sweep --format png
 ```
+
+For example, `rtt_sweep_bbrv3_rtt80.json` becomes:
+
+```yaml
+cc_algo: bbrv3
+rtt_ms: 80
+scenario: rtt_sweep
+loss_percent: 0.025
+bottleneck_mbps: 1000
+```
+
+The `flow_id` defaults to the filename stem, so each JSON file still becomes
+one transfer even though it was discovered automatically.
 
 The plot reads `flow_summary`, so if any JSON file was generated with
 `iperf3 -P`, its parallel streams are aggregated into one throughput value for
