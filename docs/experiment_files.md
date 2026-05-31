@@ -1,4 +1,4 @@
-# Research Workflows
+# Experiment File Guide
 
 This page shows how to use `iperf3_plotter` as a configurable plotting tool for
 TCP experiments. The goal is not to reproduce one paper exactly. The goal is to
@@ -136,16 +136,6 @@ flow_id: 3
 cc_algo: bbrv3
 ```
 
-Use `filename_regex` when you need full regular-expression control:
-
-```yaml
-infer:
-  filename_regex: '^(?P<aqm>taildrop|fq_codel)_rtt(?P<rtt_ms>\d+)_bdp(?P<buffer_bdp>[0-9.]+)_trial(?P<trial>\d+)_flow(?P<flow_id>\d+)_(?P<cc_algo>cubic|bbrv3)\.json$'
-```
-
-The regex must use named capture groups like `(?P<rtt_ms>\d+)`. Those group
-names become metadata fields.
-
 Use `overrides` for exceptions:
 
 ```yaml
@@ -218,15 +208,15 @@ write the friendlier `rtt_ms` in the experiment file. Measured RTT samples are
 still available as `rtt_ms` in interval-level sources and as `mean_rtt_ms` /
 `p95_rtt_ms` in summaries.
 
-## Ten JSON Files With Regex: Throughput Vs RTT
+## Ten JSON Files With Filename Pattern: Throughput Vs RTT
 
 Use this for paper-style figures where the x-axis is configured RTT and the
 series are congestion-control algorithms.
 
 This complete example uses 10 iperf3 JSON files: five configured RTT values
 times two congestion-control algorithms. The user does not list the 10 files
-one by one. `inputs.files` finds them with a glob, and `infer.filename_regex`
-extracts metadata from each filename.
+one by one. `inputs.files` finds them with a glob, and
+`infer.filename_pattern` extracts metadata from each filename.
 
 Expected files:
 
@@ -255,7 +245,7 @@ inputs:
   files: runs/rtt_sweep_*.json
 
 infer:
-  filename_regex: '^rtt_sweep_(?P<cc_algo>cubic|bbrv3)_rtt(?P<rtt_ms>\d+)\.json$'
+  filename_pattern: "rtt_sweep_{cc_algo}_rtt{rtt_ms}.json"
 
 plots:
   - name: throughput_vs_rtt
