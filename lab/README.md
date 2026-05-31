@@ -50,8 +50,9 @@ The lab creates:
 - `lab-results/experiment.json`: experiment file with `start_offset_s`, metadata, and inputs
 - `lab-results/analysis/report.html`: plots and summary report
 
-The analysis uses `--time-mode offset`, so if client 1 starts at 0 seconds and
-client 2 starts at 5 seconds, client 2 appears at X=5 in the plots.
+The generated experiment file uses `time_mode: offset`, so if client 1 starts
+at 0 seconds and client 2 starts at 5 seconds, client 2 appears at X=5 in the
+plots.
 
 ## Useful Variants
 

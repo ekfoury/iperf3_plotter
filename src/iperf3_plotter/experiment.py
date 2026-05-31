@@ -74,7 +74,7 @@ def resolve_experiment(path: Path) -> ExperimentPlan:
         raise ExperimentError("Experiment file did not match any input JSON files")
 
     defaults = _object(config.get("defaults"), "defaults")
-    inferred = _infer_metadata(config, base_dir, files)
+    inferred = _infer_metadata(config, base_dir, files, explicit_metadata)
     overrides = _override_metadata(config, base_dir)
     metadata = _metadata_map(files, defaults, inferred, explicit_metadata, overrides)
     specs = expand_plot_specs(config.get("plots", []))
@@ -212,7 +212,12 @@ def _resolve_explicit_runs(runs: Any, base_dir: Path) -> tuple[list[Path], dict[
     return files, metadata
 
 
-def _infer_metadata(config: dict[str, Any], base_dir: Path, files: list[Path]) -> dict[str, dict[str, Any]]:
+def _infer_metadata(
+    config: dict[str, Any],
+    base_dir: Path,
+    files: list[Path],
+    explicit_metadata: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
     infer = config.get("infer", config.get("derive", {}))
     infer = _object(infer, "infer")
     regex_source = _regex_source(infer)
@@ -234,13 +239,25 @@ def _infer_metadata(config: dict[str, Any], base_dir: Path, files: list[Path]) -
         use_search = False
 
     metadata: dict[str, dict[str, Any]] = {}
+    unmatched: list[str] = []
     for file in files:
+        if _has_explicit_metadata(file, explicit_metadata):
+            continue
         target = file.name if match_name_only else _relative_or_name(base_dir, file)
         match = regex.search(target) if use_search else regex.match(target)
         if not match:
+            unmatched.append(target)
             continue
         metadata[str(file)] = {key: _coerce(value) for key, value in match.groupdict().items()}
+    if unmatched:
+        preview = ", ".join(unmatched[:5])
+        extra = "" if len(unmatched) <= 5 else f", and {len(unmatched) - 5} more"
+        raise ExperimentError(f"infer rule did not match input file(s): {preview}{extra}")
     return metadata
+
+
+def _has_explicit_metadata(file: Path, explicit_metadata: dict[str, dict[str, Any]]) -> bool:
+    return str(file) in explicit_metadata or file.as_posix() in explicit_metadata or file.name in explicit_metadata
 
 
 def _override_metadata(config: dict[str, Any], base_dir: Path) -> dict[str, dict[str, Any]]:

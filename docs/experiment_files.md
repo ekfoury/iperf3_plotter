@@ -1,9 +1,9 @@
 # Experiment File Guide
 
-This page shows how to use `iperf3_plotter` as a configurable plotting tool for
-TCP experiments. The goal is not to reproduce one paper exactly. The goal is to
-show how figures like those in BBR/BBRv3 evaluations can be expressed with one
-experiment file.
+This page explains how to use one `experiment.yaml` file to describe input JSON
+files, experiment metadata, time alignment, and custom plots. The examples are
+inspired by TCP congestion-control evaluations, but the same format works for
+simple iperf3 comparisons too.
 
 Inspirational references:
 
@@ -16,8 +16,8 @@ The workflow is:
 2. Describe the experiment in `experiment.yaml`.
 3. Run `iperfplot experiment experiment.yaml --out results`.
 
-There is no separate manifest requirement in the main workflow. The experiment
-file is the manifest and the plot spec in one place.
+There is no separate metadata file required in the main workflow. The
+experiment file contains the input mapping, run metadata, and plot definitions.
 
 ## Generate The Showcase
 
@@ -116,7 +116,7 @@ defaults:
   bottleneck_mbps: 1000
 
 infer:
-  filename_pattern: "{aqm}_rtt{rtt_ms}_bdp{buffer_bdp}_trial{trial}_flow{flow_id}_{cc_algo}.json"
+  filename_pattern: "{aqm}_rtt{rtt_ms}_bdp{buffer_bdp}_trial{trial}_flow{flow_index}_{cc_algo}.json"
 ```
 
 With that pattern, this filename:
@@ -132,18 +132,24 @@ aqm: taildrop
 rtt_ms: 50
 buffer_bdp: 1
 trial: 2
-flow_id: 3
+flow_index: 3
 cc_algo: bbrv3
 ```
 
-Use `overrides` for exceptions:
+The `flow_id` defaults to the filename stem when you do not provide one. That
+is usually the safest choice because `flow_id` should identify one transfer
+uniquely across the experiment.
+
+If one file does not follow the filename convention, list that file explicitly:
 
 ```yaml
-overrides:
-  runs/weird-name.json:
-    flow_id: flow17
-    cc_algo: cubic
-    rtt_ms: 100
+inputs:
+  files: runs/buffer-rtt/*.json
+  runs:
+    - file: runs/weird-name.json
+      flow_id: flow17
+      cc_algo: cubic
+      rtt_ms: 100
 ```
 
 ## Parallel Streams And Flows
@@ -351,7 +357,7 @@ defaults:
   bottleneck_mbps: 1000
 
 infer:
-  filename_pattern: "buffer_rtt_{aqm}_rtt{rtt_ms}_bdp{buffer_bdp}_trial{trial}_flow{flow_id}_{cc_algo}.json"
+  filename_pattern: "buffer_rtt_{aqm}_rtt{rtt_ms}_bdp{buffer_bdp}_trial{trial}_flow{flow_index}_{cc_algo}.json"
 
 plots:
   - name: avg_flow_throughput_heatmap
@@ -579,7 +585,8 @@ Use `legend: false` to hide the legend.
 From iperf3 JSON alone, the tool can plot throughput, transfer size,
 retransmissions, TCP RTT samples, RTT variation, congestion window, PMTU, loss
 fields when present, stream-level behavior, flow-level aggregates, fairness,
-bandwidth shares, link utilization, and FCT for fixed-size transfers.
+bandwidth shares, and FCT for fixed-size transfers. Link utilization is also
+available when the experiment metadata includes `bottleneck_mbps`.
 
 Some paper figures need telemetry that is not in iperf3 JSON. Queue occupancy,
 AQM drop/mark counts, switch counters, host CPU, and qdisc backlog must be
@@ -601,6 +608,12 @@ Use `time_mode: global` if iperf3 timestamps are synchronized, or
 Heatmap has no output:
 
 Check that each row has values for the heatmap `x`, `y`, and `value` fields.
+
+`infer rule did not match input file`:
+
+At least one JSON filename did not match `infer.filename_pattern`. Either fix
+the filename, adjust the pattern, or list that file explicitly under
+`inputs.runs`.
 
 Share column is missing:
 

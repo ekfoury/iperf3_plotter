@@ -45,3 +45,10 @@ jobs:
         run: |
           iperfplot custom sample/my_test.json --plot-spec examples/custom_plots.yaml --out /tmp/iperfplot-custom --format png
           test -f /tmp/iperfplot-custom/rtt_cdf_by_flow.png
+
+      - name: Run experiment file
+        run: |
+          iperfplot validate examples/experiment.yaml
+          iperfplot experiment examples/experiment.yaml --out /tmp/iperfplot-experiment --format png
+          test -f /tmp/iperfplot-experiment/report.html
+          test -f /tmp/iperfplot-experiment/plots/sample_throughput.png

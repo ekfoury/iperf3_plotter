@@ -273,8 +273,8 @@ def _relative_time_warning(
     return (
         "Warning: multiple JSON files are using default --time-mode relative, "
         "so each file starts at X=0. Use --time-mode global to align by iperf3 "
-        "timestamps, or pass a manifest with --time-mode offset when clocks are "
-        "not synchronized."
+        "timestamps, or use 'iperfplot experiment' with start_offset_s metadata "
+        "when clocks are not synchronized."
     )
 
 

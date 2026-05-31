@@ -109,6 +109,58 @@ plots:
             self.assertEqual(plan.plot_specs[0]["x"], "rtt_config_ms")
             self.assertEqual(validate_experiment(config), [])
 
+    def test_experiment_infer_pattern_requires_all_files_to_match(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            runs_dir = temp_path / "runs"
+            runs_dir.mkdir()
+            shutil.copyfile(SAMPLE, runs_dir / "unexpected.json")
+
+            config = temp_path / "experiment.yaml"
+            config.write_text(
+                """
+name: bad_pattern
+inputs:
+  files: runs/*.json
+infer:
+  filename_pattern: "rtt_sweep_{cc_algo}_rtt{rtt_ms}.json"
+""",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "did not match"):
+                resolve_experiment(config)
+
+    def test_explicit_runs_do_not_need_to_match_filename_pattern(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            runs_dir = temp_path / "runs"
+            runs_dir.mkdir()
+            shutil.copyfile(SAMPLE, runs_dir / "rtt_sweep_cubic_rtt20.json")
+            shutil.copyfile(SAMPLE, runs_dir / "weird-name.json")
+
+            config = temp_path / "experiment.yaml"
+            config.write_text(
+                """
+name: mixed_inputs
+inputs:
+  files: runs/rtt_sweep_*.json
+  runs:
+    - file: runs/weird-name.json
+      flow_id: explicit_flow
+      cc_algo: bbrv3
+      rtt_ms: 80
+infer:
+  filename_pattern: "rtt_sweep_{cc_algo}_rtt{rtt_ms}.json"
+""",
+                encoding="utf-8",
+            )
+
+            plan = resolve_experiment(config)
+            self.assertEqual(len(plan.files), 2)
+            self.assertEqual(plan.metadata["rtt_sweep_cubic_rtt20.json"]["rtt_ms"], 20)
+            self.assertEqual(plan.metadata["weird-name.json"]["flow_id"], "explicit_flow")
+
 
 if __name__ == "__main__":
     unittest.main()

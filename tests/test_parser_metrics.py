@@ -173,7 +173,7 @@ class ParserMetricsTest(unittest.TestCase):
 
         self.assertIsNotNone(warning)
         self.assertIn("--time-mode global", warning or "")
-        self.assertIn("manifest", warning or "")
+        self.assertIn("iperfplot experiment", warning or "")
 
     def test_no_warning_when_relative_time_is_explicit(self) -> None:
         warning = _relative_time_warning([Path("client1.json"), Path("client2.json")], None, "relative", True)

@@ -7,7 +7,8 @@ publication-style plots, and an HTML report.
 
 It handles one file, many clients, parallel streams from `iperf3 -P`, staggered
 flow starts, flow-level aggregation, stream-level diagnostics, Jain fairness,
-bandwidth share, RTT, cwnd, retransmits, PMTU, and customizable research plots.
+bandwidth share, RTT, cwnd, retransmits, PMTU, and customizable experiment
+plots.
 
 The maintained implementation is Python-based. The original shell/gnuplot
 scripts are kept in `legacy/` for reference.
@@ -109,8 +110,8 @@ and `time_mode: offset`.
 
 ## Experiment Files
 
-For serious experiments, put everything in one YAML file: inputs, metadata,
-time alignment, and plots.
+For experiments with metadata, staggered starts, or custom plots, put everything
+in one YAML file: inputs, metadata, time alignment, and plots.
 
 ```bash
 iperfplot experiment experiment.yaml --out results
@@ -253,8 +254,7 @@ PYTHONPATH=src python3 -m iperf3_plotter custom \
 ```
 
 The low-level `custom --plot-spec` and `--manifest` options are still available
-for compatibility, but new research workflows should prefer a single
-`experiment.yaml`.
+for compatibility, but new workflows should prefer a single `experiment.yaml`.
 
 ## Optional Test Lab
 
